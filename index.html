@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.BB_BUILD=27;</script>
+<script>window.BB_BUILD=28;</script>
 </head><body><title>Sideline Sub</title>
 
 <style>
@@ -740,7 +740,7 @@ function viewSettings(){
     +'<div class="lbl">Testing</div>'+tog('testMode','Test mode','Shows +1/+5/+10 time advance on the game screen')+tog('testTimers','Test advance moves player timers too','Off = clock only')
     +'<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: '+(isViewer()?'Viewer':'Coach')+' · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div>'+(isViewer()?'':(teamPin()?'':'<div class="warn w" style="margin-top:8px;font-size:14px">No coach PIN set: anyone with the code can join as coach. Set one under Edit team.</div>')+'<div class="row" style="margin-top:8px"><button class="btn sm '+(teamPin()?'ghost':'act')+' grow" data-a="editteam">Edit team / coach PIN</button></div>')+'<div class="card" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--mut)"><div class="lbl">Sync details</div>'+syncDiag()+'<div class="row" style="margin-top:8px"><button class="btn sm ghost" data-a="forcepull">Pull from team now</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="forcepush">Push my copy now</button>')+'</div></div>'+'</div>'
     +'<div class="lbl">App updates</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(window.BB_FROM_BUNDLE?' (from team update)':IS_APK?' (built in)':' (web)')+'</div>'+tog('autoUpdate','Install team updates automatically','Only between games; during a game you get a tap-to-update banner')+'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="pushupdate">Publish version (admin)</button><button class="btn sm ghost" data-a="checkupdate">Check now</button></div>'+(window.BB_FROM_BUNDLE?'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="builtin">Go back to built-in version</button></div>':'')+'</div>'
-    +'<div class="lbl">Data</div><div class="row"><button class="btn ghost grow" data-a="history">Game history ('+S.history.length+')</button><button class="btn ghost" data-a="guide">How it works</button></div><div class="row"><button class="btn ghost grow" data-a="gotoqueues">Position rotation queues</button></div><div class="row"><button class="btn ghost grow" data-a="resetroster">Reset roster to default</button><button class="btn ghost bad" style="background:none;color:var(--bad)" data-a="wipe">Erase all</button></div>'
+    +'<div class="lbl">Data</div><div class="row"><button class="btn ghost grow" data-a="history">Game history ('+S.history.length+')</button><button class="btn ghost" data-a="guide">How it works</button></div><div class="row"><button class="btn ghost grow" data-a="gotoqueues">Position rotation queues</button></div><div class="row"><button class="btn ghost grow" data-a="resetstats">Reset season stats (games / starts)</button></div><div class="row"><button class="btn ghost grow" data-a="resetroster">Reset roster to default</button><button class="btn ghost bad" style="background:none;color:var(--bad)" data-a="wipe">Erase all</button></div>'
     +'<div style="font-size:13px;color:var(--mut);font-weight:700">Everything is stored on this phone only. Timers use timestamps, so they stay accurate while the screen is off.</div>';
 }
 
@@ -777,6 +777,7 @@ function sheetPlayer(id){
   openSheet('<h2>'+(id?'Edit player':'New player')+'</h2><input type="hidden" id="pl_id" value="'+esc(p.id)+'"><div class="field"><label for="pl_name">Name</label><input id="pl_name" value="'+esc(p.name)+'"></div><div class="field"><label for="pl_num">Jersey number</label><input id="pl_num" inputmode="numeric" value="'+esc(p.num)+'"></div>'
     +'<div class="field"><label for="pl_primary">Primary position</label><select id="pl_primary">'+ROLES.map(x=>'<option value="'+x+'" '+(p.primary===x?'selected':'')+'>'+x+' · '+RNAME[x]+'</option>').join('')+'</select></div>'
     +'<div class="field"><label>Auto-rotation positions (the app will recommend these)</label>'+chips('auto')+'</div><div class="field"><label>Manual / emergency only (never auto-recommended)</label>'+chips('manual')+'</div>'
+    +(id?'<div class="row"><div class="field grow"><label for="pl_games">Games played</label><input id="pl_games" inputmode="numeric" value="'+(p.games||0)+'"></div><div class="field grow"><label for="pl_starts">Games started</label><input id="pl_starts" inputmode="numeric" value="'+(p.starts||0)+'"></div></div>':'')
     +'<div class="field"><label for="pl_group">Development group (algorithm only, never shown on game screen)</label><select id="pl_group">'+Object.entries(GROUPS).map(([k,v])=>'<option value="'+k+'" '+(p.group===k?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'
     +'<button class="btn act big wide" data-a="saveplayer">Save</button>'+(id?'<button class="btn ghost wide" style="color:var(--bad)" data-a="delplayer" data-id="'+id+'">Delete player</button>':'')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
 }
@@ -825,7 +826,7 @@ function act(a,d,el){
       const id=$('#pl_id').value||uid(); const auto=[...document.querySelectorAll('.chips[data-k=auto] .chip.on')].map(x=>x.dataset.pos); const manual=[...document.querySelectorAll('.chips[data-k=manual] .chip.on2')].map(x=>x.dataset.pos).filter(x=>!auto.includes(x));
       const name=$('#pl_name').value.trim()||'Player'; const num=$('#pl_num').value.trim(); const primary=$('#pl_primary').value; const group=$('#pl_group').value;
       let p=player(id); if(!p){ p={id,avail:true,starts:0,benchStarts:0,games:0}; S.roster.push(p); }
-      Object.assign(p,{name,num,primary,auto:auto.length?auto:[primary],manual,group}); syncQueues(); closeSheet(); break; }
+      Object.assign(p,{name,num,primary,auto:auto.length?auto:[primary],manual,group}); if($('#pl_games')){ p.games=Math.max(0,+$('#pl_games').value||0); p.starts=Math.min(p.games,Math.max(0,+$('#pl_starts').value||0)); p.benchStarts=p.games-p.starts; } syncQueues(); closeSheet(); break; }
     case 'delplayer': { S.roster=S.roster.filter(p=>p.id!==d.id); if(G){ for(const pos of POSID) if(G.field[pos]===d.id) G.field[pos]=null; } syncQueues(); closeSheet(); break; }
     case 'toggleavail': { const p=player(d.id); p.avail=!p.avail; if(!p.avail&&G){ for(const pos of POSID) if(G.field[pos]===d.id) G.field[pos]=null; } break; }
     case 'tog': S.settings[d.k]=!S.settings[d.k]; break;
@@ -869,6 +870,8 @@ function act(a,d,el){
     case 'chatdel': deleteChat(d.id); return;
     case 'chatclear': sheetConfirm('Delete every chat message for the whole team?','chatclearconfirm','Clear chat'); return;
     case 'chatclearconfirm': closeSheet(); clearChat(); return;
+    case 'resetstats': sheetConfirm('Zero every player\'s games and starts? Roster and positions stay.','doresetstats','Reset stats'); return;
+    case 'doresetstats': for(const p of S.roster){ p.games=0; p.starts=0; p.benchStarts=0; } closeSheet(); break;
     case 'guide': guide(); return;
     case 'close': closeSheet(); return;
     case 'resume': $('#resume').remove(); return;
