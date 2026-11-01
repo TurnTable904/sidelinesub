@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.BB_BUILD=28;</script>
+<script>window.BB_BUILD=29;</script>
 </head><body><title>Sideline Sub</title>
 
 <style>
@@ -289,7 +289,7 @@ function save(periodic){
 function isViewer(){ return S.role==='viewer'; }
 /* ====================== TEAM SYNC (Google Sheet via Apps Script) ====================== */
 const SYNC={status:'off',last:0,timer:null,busy:false,remoteAt:0,remotePhase:'',lastErr:'',lastAction:'',pushedHash:''};
-function syncState(){ const st={...S.settings}; delete st.testMode; delete st.testTimers; delete st.autoUpdate; return {team:S.team,settings:st,roster:S.roster,queues:S.queues,game:S.game,history:S.history}; }
+function syncState(){ const st={...S.settings}; delete st.testMode; delete st.testTimers; delete st.autoUpdate; return {team:S.team,settings:st,roster:S.roster,queues:S.queues,game:S.game}; }
 function schedulePush(){ if(!S.syncUrl) return; clearTimeout(SYNC.timer); SYNC.timer=setTimeout(pushSync,1500); }
 function isFirebase(){ return /firebaseio\.com|firebasedatabase\.app/.test(S.syncUrl||''); }
 function teamPath(){ return '/teams/'+encodeURIComponent(CODE()); }
@@ -331,16 +331,25 @@ function normalize(st){ // Firebase drops empty arrays, empty objects and nulls;
   st.roster=(st.roster||[]).filter(Boolean).map(p=>({starts:0,benchStarts:0,games:0,avail:true,...p,auto:p.auto||[],manual:p.manual||[]}));
   st.queues=st.queues||{}; for(const pos of ROLES) st.queues[pos]=st.queues[pos]||[];
   st.chat=(st.chat||[]).filter(Boolean).slice(-200);
-  st.history=(st.history||[]).filter(Boolean).map(g=>({...g,subs:g.subs||[],players:g.players||[],starting:g.starting||{}}));
+  st.history=(st.history||[]).filter(Boolean).map(g=>({...g,id:g.id||('g'+new Date(g.date).getTime()),subs:g.subs||[],players:g.players||[],starting:g.starting||{}}));
   if(st.game){ const g=st.game; g.field=Object.fromEntries(POSID.map(x=>[x,(g.field&&g.field[x])||null])); g.ps=g.ps||{}; for(const id in g.ps){ g.ps[id].positions=g.ps[id].positions||{}; } g.subs=(g.subs||[]).filter(Boolean); g.undo=(g.undo||[]).filter(Boolean); g.starting=g.starting||null; g.altIdx=g.altIdx||0; g.lastCheck=g.lastCheck||0; g.base=g.base||0; g.running=!!g.running; g.startedAt=g.startedAt||null; g.opponent=g.opponent||''; g.goals=(g.goals||[]).filter(Boolean); }
   else st.game=null;
   return st;
 }
-function adoptRemote(d){ const _r=()=>{ applyFormation(); }; const keep={testMode:S.settings.testMode,testTimers:S.settings.testTimers,autoUpdate:S.settings.autoUpdate}; const chat=S.chat||[]; Object.assign(S,normalize(d.state)); Object.assign(S.settings,keep); S.chat=chat; applyFormation(); lastTeamHash=JSON.stringify(syncState()); SYNC.pushedHash=lastTeamHash; S.updatedAt=d.updatedAt; SYNC.status='ok'; SYNC.last=Date.now(); try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} syncQueues(); render(); }
+function adoptRemote(d){ const _r=()=>{ applyFormation(); }; const keep={testMode:S.settings.testMode,testTimers:S.settings.testTimers,autoUpdate:S.settings.autoUpdate}; const chat=S.chat||[]; const hist=S.history||[]; Object.assign(S,normalize(d.state)); Object.assign(S.settings,keep); S.chat=chat; { const ids=new Set(hist.map(g=>g.id).filter(Boolean)); for(const g of (S.history||[])) if(!g.id||!ids.has(g.id)) hist.push(g); S.history=hist; } applyFormation(); lastTeamHash=JSON.stringify(syncState()); SYNC.pushedHash=lastTeamHash; S.updatedAt=d.updatedAt; SYNC.status='ok'; SYNC.last=Date.now(); try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} syncQueues(); render(); }
 function syncDiag(){ const t=v=>v?new Date(v).toLocaleTimeString():'never'; const g=S.game; return 'This phone: role '+(S.role||'?')+' · state stamped '+t(S.updatedAt)+' · game '+(g?g.phase:'none')+'<br>Team store: stamped '+t(SYNC.remoteAt)+' · game '+(SYNC.remotePhase||'?')+'<br>Phone clock now '+t(Date.now())+' · last: '+(SYNC.lastAction||'nothing yet')+(SYNC.lastErr?'<br>Error: '+esc(SYNC.lastErr):''); }
 function syncBadge(){ const el=document.getElementById('syncbadge'); if(!el) return; el.textContent=syncText(); el.style.color=SYNC.status==='err'?'var(--bad)':'var(--mut)'; }
 function syncText(){ if(!S.syncUrl||!CODE()) return ''; if(SYNC.status==='err') return '⚠ not synced'; if(SYNC.status==='ok') return '● synced '+Math.max(0,Math.round((Date.now()-SYNC.last)/1000))+'s ago'; return '○ sync…'; }
 setInterval(()=>{ if(S.syncUrl && !document.hidden) pullSync(); }, 8000);
+/* history channel: append-only per-game records so no phone can overwrite another's games */
+function histUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games.json'; }
+async function pushHistory(rec){ if(!S.syncUrl||!CODE()||!isFirebase()||!rec.id) return; try{ await fetch(histUrl(),{method:'PATCH',body:JSON.stringify({[rec.id]:rec}),headers:{'Content-Type':'application/json'}}); rec.synced=true; save(true); }catch(e){} }
+async function pullHistory(){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ const r=await fetch(histUrl()+'?t='+Date.now(),{cache:'no-store'}); const d=await r.json()||{}; const have=new Set((S.history||[]).map(g=>g.id).filter(Boolean)); let changed=false;
+  for(const k in d){ const g=d[k]; if(g&&g.id&&!have.has(g.id)){ S.history.push({...g,synced:true}); changed=true; } }
+  // back-fill: local games that never made it up
+  for(const g of S.history){ if(g.id&&!g.synced&&!d[g.id]) await pushHistory(g); }
+  if(changed){ S.history.sort((a,b)=>new Date(b.date)-new Date(a.date)); save(true); if(S.tab==='settings') render(); } }catch(e){} }
+setInterval(()=>{ if(S.syncUrl && !document.hidden) pullHistory(); }, 30000); setTimeout(pullHistory,4000);
 /* chat channel: separate node so viewers can post and the game state is never touched */
 function chatUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/chat.json'; }
 async function pushChat(m){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ const {synced,...mm}=m; await fetch(chatUrl(),{method:'PATCH',body:JSON.stringify({[m.id]:mm}),headers:{'Content-Type':'application/json'}}); m.synced=true; }catch(e){} }
@@ -557,7 +566,7 @@ function endGame(){
   for(const id in G.ps){ const p=G.ps[id]; if(p.onField){ p.played+=Math.max(0,c-p.since);} else { p.maxBench=Math.max(p.maxBench,c-p.since);} p.since=c; p.final=true; }
   G.phase='done'; G.endClock=c;
   const rec={date:G.date,opponent:G.opponent,score:score(),goals:G.goals||[],len:c,starting:G.starting,subs:G.subs,players:availRoster().map(p=>({id:p.id,name:p.name,num:p.num,played:G.ps[p.id]?G.ps[p.id].played:0,positions:Object.keys(G.ps[p.id]?G.ps[p.id].positions:{}),maxBench:G.ps[p.id]?G.ps[p.id].maxBench:0,start:G.starting&&Object.values(G.starting).includes(p.id)})),target:S.settings.minTarget};
-  S.history.unshift(rec); if(S.history.length>40) S.history.length=40;
+  rec.id='g'+Date.now()+Math.random().toString(36).slice(2,6); S.history.unshift(rec); if(S.history.length>60) S.history.length=60; pushHistory(rec);
   save(); render();
 }
 function suggestLineup(){
@@ -833,7 +842,7 @@ function act(a,d,el){
     case 'num': { const inp=$('#set_'+d.k); const v=Math.min(+inp.max,Math.max(+inp.min,(+inp.value||0)+(+d.d))); S.settings[d.k]=v; break; }
     case 'history': sheetHistory(); return;
     case 'showlog': openSheet('<h2>Subs this game</h2>'+(G.subs.length?'<div class="hist">'+G.subs.slice().reverse().map(logLine).join('')+'</div>':'<div class="card">No subs yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>'); return;
-    case 'delhist': S.history.splice(+d.i,1); save(); sheetHistory(); return;
+    case 'delhist': { const g=S.history.splice(+d.i,1)[0]; save(true); sheetHistory(); if(g&&g.id&&S.syncUrl&&CODE()&&isFirebase()) fetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games/'+encodeURIComponent(g.id)+'.json',{method:'DELETE'}).catch(()=>{}); return; }
     case 'resetroster': sheetConfirm('Reset roster to the default team? Starts history is lost.','doresetroster','Reset roster'); return;
     case 'doresetroster': S.roster=defaultRoster(); S.queues=defaultQueues(); closeSheet(); break;
     case 'wipe': sheetConfirm('Erase roster, settings, current game and history?','dowipe','Erase everything'); return;
@@ -946,7 +955,7 @@ async function joinTeam(code,role){
   try{ const r=await fetch(S.syncUrl+'/teams/'+encodeURIComponent(code)+'/state/state/team.json?t='+Date.now(),{cache:'no-store'}); const t=await r.json();
     if(!t||!t.code){ err.textContent='No team with that code. Check with your coach.'; return; }
     if(role==='coach'&&t.pin&&pinHash(($('#tj_pin')&&$('#tj_pin').value||'').trim())!==t.pin){ err.textContent='Wrong coach PIN. Ask the coach, or join as a viewer.'; return; }
-    S.team=t; S.role=role; S.updatedAt=0; S.game=null; S.history=[]; S.chat=[]; closeSheet(); save(true); await joinSync(); pullChat(); render();
+    S.team=t; S.role=role; S.updatedAt=0; S.game=null; S.history=[]; S.chat=[]; closeSheet(); save(true); await joinSync(); pullChat(); pullHistory(); render();
     if(role==='coach'&&!S.seenGuide){ S.seenGuide=true; save(true); guide(); }
   }catch(e){ err.textContent='Could not reach the team server. Check your signal.'; }
 }
