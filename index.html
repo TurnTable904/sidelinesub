@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.BB_BUILD=29;</script>
+<script>window.BB_BUILD=31;</script>
 </head><body><title>Sideline Sub</title>
 
 <style>
@@ -250,7 +250,7 @@ setFormation('7v7');
 const GROUPS = {core:'Core',dev:'Developing',support:'Needs support'};
 const GW = {core:0,dev:1,support:2};
 
-const DEFAULT_SETTINGS = {formation:'7v7', gameLen:50, halfLen:25, subInterval:5, minTarget:20, maxSubs:2, balance:true, weakMax:4, gkAuto:false, gkInterval:12, testMode:false, testTimers:true, autoUpdate:true};
+const DEFAULT_SETTINGS = {formation:'7v7', gameLen:50, halfLen:25, subInterval:5, minTarget:20, maxSubs:2, balance:true, weakMax:4, gkSafe:true, gkSafeLead:4, gkSafeAfter:20, gkBackLead:2, gkAuto:false, gkInterval:12, testMode:false, testTimers:true, autoUpdate:true};
 
 function defaultRoster(){
   const r=(id,name,num,primary,auto,manual,group)=>({id,name,num,primary,auto,manual,group,avail:true,starts:0,benchStarts:0,games:0});
@@ -332,7 +332,7 @@ function normalize(st){ // Firebase drops empty arrays, empty objects and nulls;
   st.queues=st.queues||{}; for(const pos of ROLES) st.queues[pos]=st.queues[pos]||[];
   st.chat=(st.chat||[]).filter(Boolean).slice(-200);
   st.history=(st.history||[]).filter(Boolean).map(g=>({...g,id:g.id||('g'+new Date(g.date).getTime()),subs:g.subs||[],players:g.players||[],starting:g.starting||{}}));
-  if(st.game){ const g=st.game; g.field=Object.fromEntries(POSID.map(x=>[x,(g.field&&g.field[x])||null])); g.ps=g.ps||{}; for(const id in g.ps){ g.ps[id].positions=g.ps[id].positions||{}; } g.subs=(g.subs||[]).filter(Boolean); g.undo=(g.undo||[]).filter(Boolean); g.starting=g.starting||null; g.altIdx=g.altIdx||0; g.lastCheck=g.lastCheck||0; g.base=g.base||0; g.running=!!g.running; g.startedAt=g.startedAt||null; g.opponent=g.opponent||''; g.goals=(g.goals||[]).filter(Boolean); }
+  if(st.game){ const g=st.game; g.field=Object.fromEntries(POSID.map(x=>[x,(g.field&&g.field[x])||null])); g.ps=g.ps||{}; for(const id in g.ps){ g.ps[id].positions=g.ps[id].positions||{}; } g.subs=(g.subs||[]).filter(Boolean); g.undo=(g.undo||[]).filter(Boolean); g.starting=g.starting||null; g.altIdx=g.altIdx||0; g.lastCheck=g.lastCheck||0; g.base=g.base||0; g.running=!!g.running; g.startedAt=g.startedAt||null; g.opponent=g.opponent||''; g.goals=(g.goals||[]).filter(Boolean); if(g.gkSafeDeclined==null) g.gkSafeDeclined=-1; }
   else st.game=null;
   return st;
 }
@@ -395,6 +395,39 @@ function syncQueues(){
   }
 }
 function player(id){ return S.roster.find(p=>p.id===id); }
+function seasonGK(id){ let secs=0; for(const g of (S.history||[])){ const pr=(g.players||[]).find(x=>x.id===id); if(pr&&(pr.positions||[]).includes('GK')) secs+=(pr.gkSecs!=null?pr.gkSecs:pr.played||0); } if(G&&G.ps&&G.ps[id]&&G.ps[id].gkSecs) secs+=G.ps[id].gkSecs; return secs; }
+function gkSlot(){ return POSID.find(p=>ROLE[p]==='GK'); }
+function keeperSuggestion(c){
+  const st=S.settings; if(!st.gkSafe||!G||!['h1','h2'].includes(G.phase)) return null;
+  const slot=gkSlot(); const cur=G.field[slot]; if(!cur) return null;
+  const sc=score(); const lead=sc.us-sc.them; const minute=c/60;
+  const curP=player(cur); const primaryGK=S.roster.filter(p=>p.avail&&p.primary==='GK');
+  const starterIsIn=curP.primary==='GK';
+  if(starterIsIn){
+    if(lead<st.gkSafeLead||minute<st.gkSafeAfter) return null;
+    if(G.gkSafeDeclined===G.goals.length) return null; // coach dismissed at this score
+    const cands=S.roster.filter(p=>p.avail&&p.id!==cur&&p.auto.includes('GK')&&p.primary!=='GK');
+    if(!cands.length) return null;
+    cands.sort((a,b)=>seasonGK(a.id)-seasonGK(b.id));
+    const inP=cands[0]; const onField=fieldIds().includes(inP.id);
+    // where does the starter go? the backup's field spot if he's on the field, else a bench swap
+    let plan;
+    if(onField){ plan={type:'swap',a:inP.id,b:cur,text:esc(inP.name)+' to goal, '+esc(curP.name)+' to '+ROLE[posOf(inP.id)]}; }
+    else { const spot=POSID.find(x=>x!==slot&&G.field[x]&&curP.auto.includes(ROLE[x])); plan={type:'bench',inId:inP.id,text:esc(inP.name)+' in at goal for '+esc(curP.name)+(spot?' · '+esc(curP.name)+' goes to the bench; tap him to put him back in at '+ROLE[spot]:'')}; }
+    return {kind:'safe',lead,inP,curP,plan,why:'Up by '+lead+' at minute '+Math.floor(minute)+'. '+esc(inP.name)+' has '+fmt(seasonGK(inP.id))+' in goal this season.'};
+  } else {
+    if(lead>st.gkBackLead) return null; if(!primaryGK.length) return null;
+    const st1=primaryGK[0]; const onField=fieldIds().includes(st1.id);
+    const plan=onField?{type:'swap',a:st1.id,b:cur,text:esc(st1.name)+' back in goal, '+esc(curP.name)+' to '+ROLE[posOf(st1.id)]}:{type:'bench',inId:st1.id,text:esc(st1.name)+' back in goal for '+esc(curP.name)};
+    return {kind:'back',lead,inP:st1,curP,plan,why:'Lead is down to '+lead+'. Put your starter back.'};
+  }
+}
+function gkCard(k){
+  if(!k) return '';
+  const cls=k.kind==='safe'?'warn w':'warn';
+  return '<div class="'+cls+'" style="font-size:15px"><div class="lbl" style="color:inherit">'+(k.kind==='safe'?'Safe lead · give the backup keeper a turn':'Keeper: get the starter back in')+'</div><div style="font-size:18px;margin:4px 0">'+k.plan.text+'</div><div style="font-weight:700;font-size:13px">'+k.why+'</div>'+(isViewer()?'':'<div class="row" style="margin-top:8px"><button class="btn sm '+(k.kind==='safe'?'act':'bad')+'" data-a="gkdo">Do it</button>'+(k.kind==='safe'?'<button class="btn sm ghost" data-a="gkskip">Not now</button>':'')+'</div>')+'</div>';
+}
+function seasonStats(id){ let games=0,starts=0,secs=0; for(const g of (S.history||[])){ const pr=(g.players||[]).find(x=>x.id===id); if(!pr) continue; games++; if(pr.start) starts++; secs+=pr.played||0; } return {games,starts,secs}; }
 function availRoster(){ return S.roster.filter(p=>p.avail); }
 function uid(){ return 'p'+Math.random().toString(36).slice(2,8); }
 
@@ -513,18 +546,18 @@ function queueRotate(pos,inId,outId){
   S.queues[pos]=q;
 }
 function makeSub(inId,outId,pos,manual){
-  const c=clock(); pushUndo();
+  const c=clock(); pushUndo(); bankGK(c,outId);
   const po=ps(outId); po.played+=Math.max(0,c-po.since); po.since=c; po.onField=false;
   const pi=ps(inId); pi.maxBench=Math.max(pi.maxBench,c-pi.since); pi.since=c; pi.onField=true; pi.positions[pos]=(pi.positions[pos]||0)+1;
-  G.field[pos]=inId;
+  G.field[pos]=inId; if(ROLE[pos]==='GK') ps(inId).gkSince=c;
   queueRotate(pos,inId,outId);
   G.subs.push({t:c,inId,outId,pos,manual:!!manual});
   G.lastCheck=c; G.altIdx=0;
   save(); render(); const v=$('#view'); if(v) v.scrollTop=0;
 }
 function swapField(a,b){ // two field players exchange positions
-  const pa=posOf(a), pb=posOf(b); if(!pa||!pb) return; pushUndo();
-  G.field[pa]=b; G.field[pb]=a; ps(a).positions[pb]=(ps(a).positions[pb]||0)+1; ps(b).positions[pa]=(ps(b).positions[pa]||0)+1;
+  const pa=posOf(a), pb=posOf(b); if(!pa||!pb) return; pushUndo(); bankGK(clock(),a); bankGK(clock(),b);
+  G.field[pa]=b; G.field[pb]=a; const gs=gkSlot(); if(pa===gs) ps(b).gkSince=clock(); if(pb===gs) ps(a).gkSince=clock(); ps(a).positions[pb]=(ps(a).positions[pb]||0)+1; ps(b).positions[pa]=(ps(b).positions[pa]||0)+1;
   queueRotate(pb,a,null); queueRotate(pa,b,null);
   G.subs.push({t:clock(),swap:[a,b],pos:pb+'/'+pa}); save(); render();
 }
@@ -532,7 +565,7 @@ function kickoff(){
   if(POSID.some(p=>!G.field[p])) return;
   G.phase='h1'; G.base=0; G.running=false; G.ps={};
   for(const p of availRoster()){ const x=ps(p.id); x.since=0; }
-  for(const pos of POSID){ const id=G.field[pos]; ps(id).onField=true; ps(id).positions[pos]=1; queueRotate(pos,id,null); }
+  for(const pos of POSID){ const id=G.field[pos]; ps(id).onField=true; ps(id).positions[pos]=1; if(ROLE[pos]==='GK') ps(id).gkSince=0; queueRotate(pos,id,null); }
   G.starting={...G.field}; G.lastCheck=0;
   for(const p of availRoster()){ p.games=(p.games||0)+1; if(fieldIds().includes(p.id)) p.starts=(p.starts||0)+1; else p.benchStarts=(p.benchStarts||0)+1; }
   save(); render();
@@ -549,6 +582,7 @@ function editClock(newC,apply){
   save(); render();
 }
 function advance(mins){ editClock(clock()+mins*60, S.settings.testTimers); }
+function bankGK(c,id){ if(!G||!id) return; const slot=gkSlot(); if(G.field[slot]!==id) return; const p=ps(id); const since=(typeof p.gkSince==='number')?p.gkSince:p.since; p.gkSecs=(p.gkSecs||0)+Math.max(0,c-(since||0)); p.gkSince=null; }
 function score(){ const g=G||{}; const gl=g.goals||[]; return {us:gl.filter(x=>x.us).length,them:gl.filter(x=>!x.us).length}; }
 function addGoal(us,scorerId){ pushUndo(); G.goals=G.goals||[]; G.goals.push({t:clock(),us,scorerId:scorerId||null,id:uid()}); save(); render(); }
 function removeGoal(id){ G.goals=(G.goals||[]).filter(x=>x.id!==id); save(); render(); }
@@ -562,17 +596,17 @@ function sheetGoals(){
   openSheet('<h2>Goals · '+sc.us+' – '+sc.them+'</h2>'+(gl.length?'<div class="hist">'+gl.map(x=>'<div class="log"><span class="t">'+fmt(x.t)+'</span><span class="grow">'+(x.us?'<span class="in">'+(x.scorerId&&player(x.scorerId)?esc(player(x.scorerId).name):'Us')+'</span>':'<span class="outc">'+(G.opponent?esc(G.opponent):'Them')+'</span>')+'</span><button class="btn sm ghost" data-a="goaldel" data-id="'+x.id+'">✕</button></div>').join('')+'</div>':'<div class="card">No goals yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
 }
 function endGame(){
-  stopClock(); const c=clock();
+  stopClock(); const c=clock(); for(const id of fieldIds()) bankGK(c,id);
   for(const id in G.ps){ const p=G.ps[id]; if(p.onField){ p.played+=Math.max(0,c-p.since);} else { p.maxBench=Math.max(p.maxBench,c-p.since);} p.since=c; p.final=true; }
   G.phase='done'; G.endClock=c;
-  const rec={date:G.date,opponent:G.opponent,score:score(),goals:G.goals||[],len:c,starting:G.starting,subs:G.subs,players:availRoster().map(p=>({id:p.id,name:p.name,num:p.num,played:G.ps[p.id]?G.ps[p.id].played:0,positions:Object.keys(G.ps[p.id]?G.ps[p.id].positions:{}),maxBench:G.ps[p.id]?G.ps[p.id].maxBench:0,start:G.starting&&Object.values(G.starting).includes(p.id)})),target:S.settings.minTarget};
+  const rec={date:G.date,opponent:G.opponent,score:score(),goals:G.goals||[],len:c,starting:G.starting,subs:G.subs,players:availRoster().map(p=>({id:p.id,name:p.name,num:p.num,played:G.ps[p.id]?G.ps[p.id].played:0,gkSecs:G.ps[p.id]?(G.ps[p.id].gkSecs||0):0,positions:Object.keys(G.ps[p.id]?G.ps[p.id].positions:{}),maxBench:G.ps[p.id]?G.ps[p.id].maxBench:0,start:G.starting&&Object.values(G.starting).includes(p.id)})),target:S.settings.minTarget};
   rec.id='g'+Date.now()+Math.random().toString(36).slice(2,6); S.history.unshift(rec); if(S.history.length>60) S.history.length=60; pushHistory(rec);
   save(); render();
 }
 function suggestLineup(){
   const avail=availRoster(); const used=new Set(); const field={};
   const order=[...POSID].sort((a,b)=>['GK','LW','CB','RB','LB','ST','RW','CM'].indexOf(ROLE[a])-['GK','LW','CB','RB','LB','ST','RW','CM'].indexOf(ROLE[b]));
-  const maxStarts=Math.max(0,...avail.map(p=>p.starts||0));
+  const SS=Object.fromEntries(avail.map(p=>[p.id,seasonStats(p.id)])); const maxStarts=Math.max(0,...avail.map(p=>SS[p.id].starts));
   // each tap: players who were just on the field get a penalty, so the next suggestion benches them first
   // rotate: count how often each player has been suggested as a starter this pre-game; least-suggested wins ties
   G.suggestN=(G.suggestN||0)+1; G.sugCount=G.sugCount||{};
@@ -581,7 +615,7 @@ function suggestLineup(){
   for(const pos of order){
     let best=null,bs=-1e9;
     for(const p of avail){ if(used.has(p.id)||!p.auto.includes(ROLE[pos])) continue;
-      let s=(maxStarts-(p.starts||0))*2 + (p.benchStarts||0)*1 + (p.primary===ROLE[pos]?3:0) + (p.group==='core'?2:p.group==='dev'?0:-1);
+      let s=(maxStarts-SS[p.id].starts)*2 + (SS[p.id].games-SS[p.id].starts)*1 + (p.primary===ROLE[pos]?3:0) + (p.group==='core'?2:p.group==='dev'?0:-1);
       const qi=(S.queues[ROLE[pos]]||[]).indexOf(p.id); if(qi===0) s+=1;
       s-=(G.sugCount[p.id]||0)*3; if(prev.includes(p.id)) s-=2;
       if(ROLE[pos]==='GK' && !S.settings.gkAuto && p.primary==='GK') s+=10; // keep the real keeper unless GK rotation is on
@@ -640,6 +674,7 @@ function viewGame(){
   const rec=recommendation(c); const due=c-G.lastCheck>=S.settings.subInterval*60;
   let html='';
   if(!G.running && c===0 && G.phase==='h1' && !isViewer()) html+='<div class="card" style="font-weight:800;font-size:15px;padding:10px 14px">Tap <b>Start clock</b> at kickoff. Forgot? Tap the time and enter the ref\'s clock.</div>';
+  html+=gkCard(keeperSuggestion(c));
   if(c>0||G.running) html+='<div id="rec">'+recCard(rec,c,due)+'</div>';
   const warns=availRoster().map(p=>({p,s:ptStatus(p.id,c)})).filter(x=>x.s.code==='priority'||x.s.code==='cant');
   html+='<div id="warns">'+warns.map(x=>'<div class="warn">⚠ '+esc(x.p.name.toUpperCase())+' has only '+fmt(played(x.p.id,c))+'. Needs '+fmt(x.s.needed)+' more, '+fmt(x.s.remaining)+' left.</div>').join('')+'</div>';
@@ -678,7 +713,7 @@ function viewSetup(){
   h+='<div class="card"><div class="lbl">Step 2 · Starting '+POSID.length+'</div><div style="font-weight:700;margin:4px 0 8px">Tap <b>Suggest</b> to fill the field. Tap again for a different mix. Tap any spot to change it by hand.</div><div class="row"><button class="btn act grow" data-a="suggest">'+(G.suggestN?'Suggest another':'Suggest lineup')+'</button><button class="btn ghost" data-a="clearlineup">Clear</button></div></div>';
   h+='<div class="pitch'+(POSID.length>7?' big':'')+'">'+POSID.map(pos=>bubble(pos,G.field[pos],c,'')).join('')+'</div>';
   const bench=benchIds();
-  h+='<div class="lbl">Starting on the bench</div><div class="bench">'+(bench.length?bench.map(id=>{const p=player(id);return '<button class="bp" data-a="setuppick" data-id="'+id+'"><div class="grow"><div class="nm">'+esc(p.name)+'</div><div class="ps">Plays '+p.auto.join(', ')+' · started '+(p.starts||0)+' of '+(p.games||0)+' games</div></div><div class="st">Tap to<br>place</div></button>';}).join(''):'<div class="card">Nobody. Pick '+POSID.length+' starters.</div>')+'</div>';
+  h+='<div class="lbl">Starting on the bench</div><div class="bench">'+(bench.length?bench.map(id=>{const p=player(id);return '<button class="bp" data-a="setuppick" data-id="'+id+'"><div class="grow"><div class="nm">'+esc(p.name)+'</div><div class="ps">Plays '+p.auto.join(', ')+' · '+(st=>st.games?'started '+st.starts+' of '+st.games+' games':'no games yet')(seasonStats(p.id))+'</div></div><div class="st">Tap to<br>place</div></button>';}).join(''):'<div class="card">Nobody. Pick '+POSID.length+' starters.</div>')+'</div>';
   h+='<div class="card"><div class="lbl">Step 3 · Kickoff</div><div class="field" style="margin-top:6px"><label for="opp">Opponent (optional)</label><input id="opp" value="'+esc(G.opponent||'')+'" placeholder="e.g. Tigers"></div>'
     +'<button class="btn ok big wide" style="margin-top:10px" data-a="kickoff" '+(full?'':'disabled')+'>'+(full?'Kickoff':'Fill all '+POSID.length+' spots first')+'</button></div>';
   return h;
@@ -698,7 +733,7 @@ function viewRoster(){
   const inGame=G&&G.phase!=='setup'&&G.phase!=='done';
   let h='<div class="row"><div class="lbl grow">Roster · '+availRoster().length+' of '+S.roster.length+' available today</div>'+(isViewer()?'':'<button class="btn sm act" data-a="addplayer">+ Add</button>')+'</div>';
   if(inGame) h+='<div class="card" style="font-weight:700">Game in progress. Edits apply immediately; mark a player out today to drop him from the bench.</div>';
-  h+='<div class="bench">'+S.roster.map(p=>'<div class="rp '+(p.avail?'':'off')+'">'+(isViewer()?'<div class="grow">':'<button class="grow" style="text-align:left" data-a="editplayer" data-id="'+p.id+'">')+'<div class="nm">'+nm(p)+(p.avail?'':' <span class="tag b">out today</span>')+'</div><div class="ps">'+p.primary+' primary · auto '+p.auto.join('/')+(p.manual.length?' · manual '+p.manual.join('/'):'')+' · started '+(p.starts||0)+'/'+(p.games||0)+'</div>'+(isViewer()?'</div>':'</button><button class="btn sm '+(p.avail?'ghost':'bad')+'" data-a="toggleavail" data-id="'+p.id+'">'+(p.avail?'Out today':'In')+'</button>')+'</div>').join('')+'</div>';
+  h+='<div class="bench">'+S.roster.map(p=>'<div class="rp '+(p.avail?'':'off')+'">'+(isViewer()?'<div class="grow">':'<button class="grow" style="text-align:left" data-a="editplayer" data-id="'+p.id+'">')+'<div class="nm">'+nm(p)+(p.avail?'':' <span class="tag b">out today</span>')+'</div><div class="ps">'+p.primary+' primary · auto '+p.auto.join('/')+(p.manual.length?' · manual '+p.manual.join('/'):'')+' · '+(st=>st.games?('started '+st.starts+' of '+st.games+' · '+fmt(st.secs)+' this season'):'no games yet')(seasonStats(p.id))+'</div>'+(isViewer()?'</div>':'</button><button class="btn sm '+(p.avail?'ghost':'bad')+'" data-a="toggleavail" data-id="'+p.id+'">'+(p.avail?'Out today':'In')+'</button>')+'</div>').join('')+'</div>';
   return h;
 }
 
@@ -745,7 +780,7 @@ function viewSettings(){
   const fsel='<div class="row" style="justify-content:space-between"><div class="field"><label>Formation</label></div><select id="set_formation" '+(G&&G.phase!=='setup'&&G.phase!=='done'?'disabled':'')+'>'+Object.entries(FORMATIONS).map(([k,f])=>'<option value="'+k+'" '+(S.settings.formation===k?'selected':'')+'>'+f.name+'</option>').join('')+'</select></div>'+(G&&G.phase!=='setup'&&G.phase!=='done'?'<div style="font-size:13px;color:var(--mut);font-weight:700">Formation locks while a game is running.</div>':'');
   return '<div class="lbl">Game</div>'+fsel+num('gameLen','Game length (min)',10,120,5)+num('halfLen','Half length (min)',5,60,5)+num('subInterval','Sub check every (min)',1,20)+num('minTarget','Minimum minutes per player',0,120)+num('maxSubs','Subs suggested per window (1 to 3)',1,3)
     +'<div class="lbl">Lineup balance</div>'+tog('balance','Balance lineups','Avoid stacking developing players at once')+num('weakMax','Max development load on field',0,14)+'<div style="font-size:14px;color:var(--mut);font-weight:700">Core = 0, Developing = 1, Needs support = 2 per player. Default 4 (so all four developing players never start together).</div>'
-    +'<div class="lbl">Goalkeeper</div>'+tog('gkAuto','Auto-rotate goalkeeper','Off = GK changes are manual only')+num('gkInterval','GK rotation interval (min)',1,60)
+    +'<div class="lbl">Goalkeeper</div>'+tog('gkSafe','Suggest a backup keeper when the lead is safe','Picks the approved keeper with the fewest GK minutes this season; starter moves to a field spot')+num('gkSafeLead','Safe lead (goals ahead)',1,10)+num('gkSafeAfter','Not before game minute',0,60)+num('gkBackLead','Put the starter back if lead drops to',0,10)+tog('gkAuto','Auto-rotate goalkeeper by time','Off = GK changes are manual only')+num('gkInterval','GK rotation interval (min)',1,60)
     +'<div class="lbl">Testing</div>'+tog('testMode','Test mode','Shows +1/+5/+10 time advance on the game screen')+tog('testTimers','Test advance moves player timers too','Off = clock only')
     +'<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: '+(isViewer()?'Viewer':'Coach')+' · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div>'+(isViewer()?'':(teamPin()?'':'<div class="warn w" style="margin-top:8px;font-size:14px">No coach PIN set: anyone with the code can join as coach. Set one under Edit team.</div>')+'<div class="row" style="margin-top:8px"><button class="btn sm '+(teamPin()?'ghost':'act')+' grow" data-a="editteam">Edit team / coach PIN</button></div>')+'<div class="card" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--mut)"><div class="lbl">Sync details</div>'+syncDiag()+'<div class="row" style="margin-top:8px"><button class="btn sm ghost" data-a="forcepull">Pull from team now</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="forcepush">Push my copy now</button>')+'</div></div>'+'</div>'
     +'<div class="lbl">App updates</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(window.BB_FROM_BUNDLE?' (from team update)':IS_APK?' (built in)':' (web)')+'</div>'+tog('autoUpdate','Install team updates automatically','Only between games; during a game you get a tap-to-update banner')+'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="pushupdate">Publish version (admin)</button><button class="btn sm ghost" data-a="checkupdate">Check now</button></div>'+(window.BB_FROM_BUNDLE?'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="builtin">Go back to built-in version</button></div>':'')+'</div>'
@@ -881,6 +916,8 @@ function act(a,d,el){
     case 'chatclearconfirm': closeSheet(); clearChat(); return;
     case 'resetstats': sheetConfirm('Zero every player\'s games and starts? Roster and positions stay.','doresetstats','Reset stats'); return;
     case 'doresetstats': for(const p of S.roster){ p.games=0; p.starts=0; p.benchStarts=0; } closeSheet(); break;
+    case 'gkdo': { const k=keeperSuggestion(clock()); if(!k) return; if(k.plan.type==='swap') swapField(k.plan.a,k.plan.b); else makeSub(k.plan.inId,G.field[gkSlot()],gkSlot(),true); return; }
+    case 'gkskip': G.gkSafeDeclined=G.goals.length; break;
     case 'guide': guide(); return;
     case 'close': closeSheet(); return;
     case 'resume': $('#resume').remove(); return;
@@ -916,7 +953,7 @@ setInterval(()=>{
   if(S.tab==='game' && G.running){
     const due=c-G.lastCheck>=st.subInterval*60;
     const rec=recommendation(c); const key=rec.first?rec.first.inId+rec.first.outId+rec.first.pos+(rec.second?rec.second.inId+rec.second.outId:''):'none';
-    const warns=availRoster().map(p=>({p,s:ptStatus(p.id,c)})).filter(x=>x.s.code==='priority'||x.s.code==='cant'); const wk=warns.map(x=>x.p.id).join(',');
+    const warns=availRoster().map(p=>({p,s:ptStatus(p.id,c)})).filter(x=>x.s.code==='priority'||x.s.code==='cant'); const wk=warns.map(x=>x.p.id).join(',')+'|'+(keeperSuggestion(c)?keeperSuggestion(c).kind+keeperSuggestion(c).inP.id:'');
     const halfEnd=(G.phase==='h1'&&c>=halfSecs())||(G.phase==='h2'&&c>=gameSecs());
     if(key!==lastRecKey||due!==lastDue||wk!==lastWarnKey||halfEnd){ lastRecKey=key; lastDue=due; lastWarnKey=wk; render(); }
   }
