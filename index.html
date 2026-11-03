@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.BB_BUILD=31;</script>
+<script>window.BB_BUILD=32;</script>
 </head><body><title>Sideline Sub</title>
 
 <style>
@@ -669,12 +669,13 @@ function viewGame(){
   if(!S.team) return '<div class="card" style="font-weight:800">Join or create a team to get started.<div class="row" style="margin-top:10px"><button class="btn act grow" data-a="team">Get started</button></div></div>';
   if(!G) newGame();
   const c=clock();
-  if(G.phase==='setup') return viewSetup();
+  if(G.phase==='setup') return isViewer()?viewPregame():viewSetup();
   if(G.phase==='done') return viewSummary();
   const rec=recommendation(c); const due=c-G.lastCheck>=S.settings.subInterval*60;
   let html='';
   if(!G.running && c===0 && G.phase==='h1' && !isViewer()) html+='<div class="card" style="font-weight:800;font-size:15px;padding:10px 14px">Tap <b>Start clock</b> at kickoff. Forgot? Tap the time and enter the ref\'s clock.</div>';
   html+=gkCard(keeperSuggestion(c));
+  if(isViewer()){ const sc=score(); const gl=(G.goals||[]).filter(x=>x.us&&x.scorerId&&player(x.scorerId)); if(gl.length) html+='<div class="card" style="font-weight:800">Goals: '+gl.map(x=>esc(player(x.scorerId).name)+' '+fmt(x.t)).join(' · ')+'</div>'; }
   if(c>0||G.running) html+='<div id="rec">'+recCard(rec,c,due)+'</div>';
   const warns=availRoster().map(p=>({p,s:ptStatus(p.id,c)})).filter(x=>x.s.code==='priority'||x.s.code==='cant');
   html+='<div id="warns">'+warns.map(x=>'<div class="warn">⚠ '+esc(x.p.name.toUpperCase())+' has only '+fmt(played(x.p.id,c))+'. Needs '+fmt(x.s.needed)+' more, '+fmt(x.s.remaining)+' left.</div>').join('')+'</div>';
@@ -719,13 +720,21 @@ function viewSetup(){
   return h;
 }
 
+function viewPregame(){
+  const last=(S.history||[])[0]; const avail=availRoster(); const out=S.roster.filter(p=>!p.avail);
+  let h='<div class="card"><div class="lbl">Next game</div><div class="big" style="margin-top:4px">Waiting for kickoff</div><div style="font-weight:700;color:var(--mut);margin-top:4px">The field, score and minutes show here live once the coach starts the clock.</div></div>';
+  if(last){ const sc=last.score||{us:0,them:0}; const scorers=(last.goals||[]).filter(g=>g.us&&g.scorerId).map(g=>{const pl=player(g.scorerId);return pl?pl.name:null;}).filter(Boolean); const cnt={}; for(const n of scorers) cnt[n]=(cnt[n]||0)+1;
+    h+='<div class="card"><div class="lbl">Last game · '+new Date(last.date).toLocaleDateString()+(last.opponent?' vs '+esc(last.opponent):'')+'</div><div class="clock" style="margin:6px 0">'+sc.us+' – '+sc.them+'</div>'+(Object.keys(cnt).length?'<div style="font-weight:700;color:var(--mut)">Goals: '+Object.entries(cnt).map(([n,c])=>esc(n)+(c>1?' ×'+c:'')).join(', ')+'</div>':'')+'</div>'; }
+  h+='<div class="lbl">Today\'s squad · '+avail.length+' players'+(out.length?' · out: '+out.map(p=>esc(p.name)).join(', '):'')+'</div><div class="bench">'+avail.map(p=>{const st=seasonStats(p.id);return '<div class="bp"><div class="grow"><div class="nm">'+esc(p.name)+' <small>#'+esc(p.num)+'</small></div><div class="ps">'+esc(RNAME[p.primary]||p.primary)+'</div></div><div class="st">'+(st.games?'<b>'+fmt(st.secs)+'</b> this season<br>'+st.games+' game'+(st.games>1?'s':'')+' · '+st.starts+' start'+(st.starts!==1?'s':''):'first game')+'</div></div>';}).join('')+'</div>';
+  return h;
+}
 function viewSummary(){
   const t=S.settings.minTarget*60; const rows=availRoster().map(p=>({p,x:G.ps[p.id]||{played:0,maxBench:0,positions:{}}})).sort((a,b)=>a.x.played-b.x.played);
   const missed=rows.filter(r=>r.x.played<t);
   let h='<div class="card"><div class="lbl">'+esc(TEAMNAME())+' · Final · '+fmt(G.endClock||0)+' played</div><div class="big" style="margin-top:4px">'+(missed.length?'⚠ '+missed.length+' under '+S.settings.minTarget+' min: '+missed.map(r=>r.p.name).join(', '):'✓ Everyone reached '+S.settings.minTarget+' min')+'</div><div style="margin-top:6px;color:var(--mut);font-weight:700">'+G.subs.filter(s=>!s.swap).length+' subs · '+(G.opponent?'vs '+esc(G.opponent):'')+'</div><div class="clock" style="margin-top:8px">'+score().us+' – '+score().them+'</div><div style="font-weight:700;color:var(--mut)">'+(G.goals||[]).filter(x=>x.us&&x.scorerId&&player(x.scorerId)).map(x=>esc(player(x.scorerId).name)).join(', ')+'</div></div>';
   h+='<table class="sum"><tr><th>Player</th><th class="r">Played</th><th>Positions</th><th class="r">Max bench</th><th></th></tr>'+rows.map(r=>'<tr><td>'+esc(r.p.name)+(G.starting&&Object.values(G.starting).includes(r.p.id)?' <span class="tag g">start</span>':'')+'</td><td class="r"><b>'+fmt(r.x.played)+'</b></td><td>'+Object.keys(r.x.positions).join(' ')+'</td><td class="r">'+fmt(r.x.maxBench)+'</td><td>'+(r.x.played>=t?'<span class="tag ok">✓</span>':'<span class="tag b">short</span>')+'</td></tr>').join('')+'</table>';
   if(G.subs.length) h+='<div class="lbl">Substitutions</div><div class="hist">'+G.subs.map(logLine).join('')+'</div>';
-  h+='<button class="btn act big wide" data-a="newgame">New game</button>';
+  if(!isViewer()) h+='<button class="btn act big wide" data-a="newgame">New game</button>';
   return h;
 }
 
@@ -768,9 +777,9 @@ function viewMinutes(){
 }
 
 function viewSettingsViewer(tog){
-  return '<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: '+(isViewer()?'Viewer':'Coach')+' · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div>'+(isViewer()?'':(teamPin()?'':'<div class="warn w" style="margin-top:8px;font-size:14px">No coach PIN set: anyone with the code can join as coach. Set one under Edit team.</div>')+'<div class="row" style="margin-top:8px"><button class="btn sm '+(teamPin()?'ghost':'act')+' grow" data-a="editteam">Edit team / coach PIN</button></div>')+'<div class="card" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--mut)"><div class="lbl">Sync details</div>'+syncDiag()+'<div class="row" style="margin-top:8px"><button class="btn sm ghost" data-a="forcepull">Pull from team now</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="forcepush">Push my copy now</button>')+'</div></div>'+'</div>'
-    +'<div class="lbl">App updates</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+'</div>'+tog('autoUpdate','Install team updates automatically','')+'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="checkupdate">Check now</button>'+(window.BB_FROM_BUNDLE?'<button class="btn sm ghost" data-a="builtin">Built-in version</button>':'')+'</div></div>'
-    +'<div class="row"><button class="btn ghost grow" data-a="history">Game history ('+S.history.length+')</button><button class="btn ghost" data-a="gotoqueues">Rotation queues</button></div>';
+  return '<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: Viewer · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div></div>'
+    +'<div class="row"><button class="btn act grow" data-a="history">Season results &amp; minutes</button></div>'
+    +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+'</div>'+(IS_APK?tog('autoUpdate','Install updates automatically',''):'')+'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="forcepull">Refresh from team</button>'+(IS_APK?'<button class="btn sm ghost" data-a="checkupdate">Check for update</button>':'')+'</div></div>';
 }
 function viewSettings(){
   const s=S.settings;
@@ -825,7 +834,11 @@ function sheetPlayer(id){
     +'<div class="field"><label for="pl_group">Development group (algorithm only, never shown on game screen)</label><select id="pl_group">'+Object.entries(GROUPS).map(([k,v])=>'<option value="'+k+'" '+(p.group===k?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'
     +'<button class="btn act big wide" data-a="saveplayer">Save</button>'+(id?'<button class="btn ghost wide" style="color:var(--bad)" data-a="delplayer" data-id="'+id+'">Delete player</button>':'')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
 }
-function sheetHistory(){
+function sheetHistoryViewer(){
+  openSheet('<h2>Season</h2>'+(S.history.length?S.history.map(g=>{ const sc=g.score||{us:0,them:0}; const cnt={}; for(const x of (g.goals||[])){ if(x.us&&x.scorerId){ const pl=player(x.scorerId); if(pl) cnt[pl.name]=(cnt[pl.name]||0)+1; } }
+    return '<div class="hist"><div class="row"><b class="grow">'+new Date(g.date).toLocaleDateString()+(g.opponent?' vs '+esc(g.opponent):'')+'</b><span class="big">'+sc.us+' – '+sc.them+'</span></div>'+(Object.keys(cnt).length?'<div style="font-size:14px;font-weight:700;color:var(--mut)">Goals: '+Object.entries(cnt).map(([n,c])=>esc(n)+(c>1?' ×'+c:'')).join(', ')+'</div>':'')+'<table style="margin-top:6px"><tr><th>Player</th><th class="r">Minutes</th><th>Positions</th></tr>'+(g.players||[]).slice().sort((a,b)=>b.played-a.played).map(p=>'<tr><td>'+esc(p.name)+(p.start?' <span class="tag g">start</span>':'')+'</td><td class="r"><b>'+fmt(p.played)+'</b></td><td>'+(p.positions||[]).join(' ')+'</td></tr>').join('')+'</table></div>'; }).join(''):'<div class="card">No games yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
+}
+function sheetHistory(){ if(isViewer()) return sheetHistoryViewer();
   openSheet('<h2>Game history</h2>'+(S.history.length?S.history.map((g,i)=>'<div class="hist"><b>'+new Date(g.date).toLocaleDateString()+(g.opponent?' vs '+esc(g.opponent):'')+'</b> · '+fmt(g.len)+' · '+g.subs.filter(s=>!s.swap).length+' subs<div style="font-size:14px">'+g.players.slice().sort((a,b)=>a.played-b.played).map(p=>esc(p.name)+' '+fmt(p.played)+(p.played<g.target*60?' ⚠':'')).join(' · ')+'</div><button class="btn sm ghost" data-a="delhist" data-i="'+i+'">Delete</button></div>').join(''):'<div class="card">No completed games yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
 }
 function sheetConfirm(text,action,label){ openSheet('<h2>'+text+'</h2><button class="btn bad big wide" data-a="'+action+'" data-confirmed="1">'+label+'</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
@@ -877,7 +890,7 @@ function act(a,d,el){
     case 'num': { const inp=$('#set_'+d.k); const v=Math.min(+inp.max,Math.max(+inp.min,(+inp.value||0)+(+d.d))); S.settings[d.k]=v; break; }
     case 'history': sheetHistory(); return;
     case 'showlog': openSheet('<h2>Subs this game</h2>'+(G.subs.length?'<div class="hist">'+G.subs.slice().reverse().map(logLine).join('')+'</div>':'<div class="card">No subs yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>'); return;
-    case 'delhist': { const g=S.history.splice(+d.i,1)[0]; save(true); sheetHistory(); if(g&&g.id&&S.syncUrl&&CODE()&&isFirebase()) fetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games/'+encodeURIComponent(g.id)+'.json',{method:'DELETE'}).catch(()=>{}); return; }
+    case 'delhist': { if(isViewer()) return; const g=S.history.splice(+d.i,1)[0]; save(true); sheetHistory(); if(g&&g.id&&S.syncUrl&&CODE()&&isFirebase()) fetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games/'+encodeURIComponent(g.id)+'.json',{method:'DELETE'}).catch(()=>{}); return; }
     case 'resetroster': sheetConfirm('Reset roster to the default team? Starts history is lost.','doresetroster','Reset roster'); return;
     case 'doresetroster': S.roster=defaultRoster(); S.queues=defaultQueues(); closeSheet(); break;
     case 'wipe': sheetConfirm('Erase roster, settings, current game and history?','dowipe','Erase everything'); return;
@@ -916,7 +929,7 @@ function act(a,d,el){
     case 'chatclearconfirm': closeSheet(); clearChat(); return;
     case 'resetstats': sheetConfirm('Zero every player\'s games and starts? Roster and positions stay.','doresetstats','Reset stats'); return;
     case 'doresetstats': for(const p of S.roster){ p.games=0; p.starts=0; p.benchStarts=0; } closeSheet(); break;
-    case 'gkdo': { const k=keeperSuggestion(clock()); if(!k) return; if(k.plan.type==='swap') swapField(k.plan.a,k.plan.b); else makeSub(k.plan.inId,G.field[gkSlot()],gkSlot(),true); return; }
+    case 'gkdo': { if(isViewer()) return; const k=keeperSuggestion(clock()); if(!k) return; if(k.plan.type==='swap') swapField(k.plan.a,k.plan.b); else makeSub(k.plan.inId,G.field[gkSlot()],gkSlot(),true); return; }
     case 'gkskip': G.gkSafeDeclined=G.goals.length; break;
     case 'guide': guide(); return;
     case 'close': closeSheet(); return;
