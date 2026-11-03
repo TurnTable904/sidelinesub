@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.BB_BUILD=32;</script>
+<script>window.BB_BUILD=33;</script>
 </head><body><title>Sideline Sub</title>
 
 <style>
@@ -290,7 +290,7 @@ function isViewer(){ return S.role==='viewer'; }
 /* ====================== TEAM SYNC (Google Sheet via Apps Script) ====================== */
 const SYNC={status:'off',last:0,timer:null,busy:false,remoteAt:0,remotePhase:'',lastErr:'',lastAction:'',pushedHash:''};
 function syncState(){ const st={...S.settings}; delete st.testMode; delete st.testTimers; delete st.autoUpdate; return {team:S.team,settings:st,roster:S.roster,queues:S.queues,game:S.game}; }
-function schedulePush(){ if(!S.syncUrl) return; clearTimeout(SYNC.timer); SYNC.timer=setTimeout(pushSync,1500); }
+function schedulePush(){ if(!S.syncUrl) return; clearTimeout(SYNC.timer); SYNC.timer=setTimeout(pushSync,(G&&G.phase==='setup')?400:1500); }
 function isFirebase(){ return /firebaseio\.com|firebasedatabase\.app/.test(S.syncUrl||''); }
 function teamPath(){ return '/teams/'+encodeURIComponent(CODE()); }
 function fbUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/state.json'; }
@@ -340,7 +340,7 @@ function adoptRemote(d){ const _r=()=>{ applyFormation(); }; const keep={testMod
 function syncDiag(){ const t=v=>v?new Date(v).toLocaleTimeString():'never'; const g=S.game; return 'This phone: role '+(S.role||'?')+' · state stamped '+t(S.updatedAt)+' · game '+(g?g.phase:'none')+'<br>Team store: stamped '+t(SYNC.remoteAt)+' · game '+(SYNC.remotePhase||'?')+'<br>Phone clock now '+t(Date.now())+' · last: '+(SYNC.lastAction||'nothing yet')+(SYNC.lastErr?'<br>Error: '+esc(SYNC.lastErr):''); }
 function syncBadge(){ const el=document.getElementById('syncbadge'); if(!el) return; el.textContent=syncText(); el.style.color=SYNC.status==='err'?'var(--bad)':'var(--mut)'; }
 function syncText(){ if(!S.syncUrl||!CODE()) return ''; if(SYNC.status==='err') return '⚠ not synced'; if(SYNC.status==='ok') return '● synced '+Math.max(0,Math.round((Date.now()-SYNC.last)/1000))+'s ago'; return '○ sync…'; }
-setInterval(()=>{ if(S.syncUrl && !document.hidden) pullSync(); }, 8000);
+setInterval(()=>{ if(S.syncUrl && !document.hidden && (!isViewer()||Date.now()%10000<5000)) pullSync(); }, 5000);
 /* history channel: append-only per-game records so no phone can overwrite another's games */
 function histUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games.json'; }
 async function pushHistory(rec){ if(!S.syncUrl||!CODE()||!isFirebase()||!rec.id) return; try{ await fetch(histUrl(),{method:'PATCH',body:JSON.stringify({[rec.id]:rec}),headers:{'Content-Type':'application/json'}}); rec.synced=true; save(true); }catch(e){} }
@@ -722,7 +722,10 @@ function viewSetup(){
 
 function viewPregame(){
   const last=(S.history||[])[0]; const avail=availRoster(); const out=S.roster.filter(p=>!p.avail);
-  let h='<div class="card"><div class="lbl">Next game</div><div class="big" style="margin-top:4px">Waiting for kickoff</div><div style="font-weight:700;color:var(--mut);margin-top:4px">The field, score and minutes show here live once the coach starts the clock.</div></div>';
+  const filled=POSID.filter(x=>G.field[x]).length; const bench=benchIds();
+  let h='<div class="card"><div class="lbl">Next game</div><div class="big" style="margin-top:4px">'+(filled?'Coach is setting the lineup':'Waiting for the coach')+'</div><div style="font-weight:700;color:var(--mut);margin-top:4px">'+(filled?filled+' of '+POSID.length+' spots set. Updates as the coach changes it.':'The lineup shows here as soon as the coach starts picking.')+'</div></div>';
+  if(filled){ h+='<div class="lbl">Starting lineup</div><div class="pitch'+(POSID.length>7?' big':'')+'">'+POSID.map(pos=>bubble(pos,G.field[pos],0,'')).join('')+'</div>';
+    h+='<div class="lbl">Starting on the bench</div><div class="bench">'+(bench.length?bench.map(id=>{const p=player(id);return '<div class="bp"><div class="grow"><div class="nm">'+esc(p.name)+' <small>#'+esc(p.num)+'</small></div><div class="ps">'+esc(RNAME[p.primary]||p.primary)+'</div></div></div>';}).join(''):'<div class="card">Everyone starts.</div>')+'</div>'; }
   if(last){ const sc=last.score||{us:0,them:0}; const scorers=(last.goals||[]).filter(g=>g.us&&g.scorerId).map(g=>{const pl=player(g.scorerId);return pl?pl.name:null;}).filter(Boolean); const cnt={}; for(const n of scorers) cnt[n]=(cnt[n]||0)+1;
     h+='<div class="card"><div class="lbl">Last game · '+new Date(last.date).toLocaleDateString()+(last.opponent?' vs '+esc(last.opponent):'')+'</div><div class="clock" style="margin:6px 0">'+sc.us+' – '+sc.them+'</div>'+(Object.keys(cnt).length?'<div style="font-weight:700;color:var(--mut)">Goals: '+Object.entries(cnt).map(([n,c])=>esc(n)+(c>1?' ×'+c:'')).join(', ')+'</div>':'')+'</div>'; }
   h+='<div class="lbl">Today\'s squad · '+avail.length+' players'+(out.length?' · out: '+out.map(p=>esc(p.name)).join(', '):'')+'</div><div class="bench">'+avail.map(p=>{const st=seasonStats(p.id);return '<div class="bp"><div class="grow"><div class="nm">'+esc(p.name)+' <small>#'+esc(p.num)+'</small></div><div class="ps">'+esc(RNAME[p.primary]||p.primary)+'</div></div><div class="st">'+(st.games?'<b>'+fmt(st.secs)+'</b> this season<br>'+st.games+' game'+(st.games>1?'s':'')+' · '+st.starts+' start'+(st.starts!==1?'s':''):'first game')+'</div></div>';}).join('')+'</div>';
