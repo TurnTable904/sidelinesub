@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.BB_BUILD=33;</script>
+<script>window.BB_BUILD=34;</script>
 </head><body><title>Sideline Sub</title>
 
 <style>
@@ -274,11 +274,11 @@ function defaultQueues(){
 
 /* ====================== STATE / PERSIST ====================== */
 const LS='sidelinesub.v1';
-let S = {settings:{...DEFAULT_SETTINGS}, roster:defaultRoster(), queues:defaultQueues(), game:null, history:[], tab:'game', updatedAt:0, syncUrl:SYNC_BASE, chat:[], chatName:'', role:'', team:null};
+let S = {settings:{...DEFAULT_SETTINGS}, roster:defaultRoster(), queues:defaultQueues(), game:null, history:[], tab:'game', updatedAt:0, syncUrl:SYNC_BASE, chat:[], chatName:'', role:'', team:null, devId:''};
 function applyFormation(){ setFormation(S.settings.formation||'7v7'); }
 function load(){
   try{ const raw=localStorage.getItem(LS); if(raw){ const d=JSON.parse(raw); S={...S,...d}; Object.assign(S,normalize(S)); } }catch(e){}
-  S.syncUrl=SYNC_BASE;
+  S.syncUrl=SYNC_BASE; if(!S.devId){ S.devId='d'+Math.random().toString(36).slice(2,8); }
   syncQueues();
 }
 let lastTeamHash='';
@@ -350,6 +350,23 @@ async function pullHistory(){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try
   for(const g of S.history){ if(g.id&&!g.synced&&!d[g.id]) await pushHistory(g); }
   if(changed){ S.history.sort((a,b)=>new Date(b.date)-new Date(a.date)); save(true); if(S.tab==='settings') render(); } }catch(e){} }
 setInterval(()=>{ if(S.syncUrl && !document.hidden) pullHistory(); }, 30000); setTimeout(pullHistory,4000);
+/* presence: who has the app open */
+const PRES={list:[],last:0};
+function presUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/presence'; }
+async function heartbeat(){ if(!S.syncUrl||!CODE()||!isFirebase()||document.hidden) return;
+  try{ await fetch(presUrl()+'/'+S.devId+'.json',{method:'PUT',body:JSON.stringify({name:S.chatName||'',role:S.role||'viewer',t:Date.now(),v:APP_VERSION,web:!IS_APK}),headers:{'Content-Type':'application/json'}}); }catch(e){} }
+async function pullPresence(){ if(!S.syncUrl||!CODE()||!isFirebase()||isViewer()) return;
+  try{ const r=await fetch(presUrl()+'.json?t='+Date.now(),{cache:'no-store'}); const d=await r.json()||{}; PRES.list=Object.entries(d).map(([id,x])=>({id,...x})); PRES.last=Date.now(); presBadge(); trackWatch(); }catch(e){} }
+function trackWatch(){ if(G&&['h1','ht','h2'].includes(G.phase)){ G.maxWatch=Math.max(G.maxWatch||0,watching().length); } }
+function watching(){ const cut=Date.now()-150000; return PRES.list.filter(x=>x.t>cut); }
+function presBadge(){ const el=document.getElementById('presbadge'); if(el) el.textContent=watching().length?('👀 '+watching().length):''; }
+setInterval(heartbeat,60000); setTimeout(heartbeat,2500);
+setInterval(()=>{ if(!document.hidden) pullPresence(); },30000); setTimeout(pullPresence,3000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) heartbeat(); });
+function sheetPresence(){ const now=Date.now(); const list=PRES.list.slice().sort((a,b)=>b.t-a.t);
+  const row=x=>'<div class="log"><span class="grow">'+(x.name?esc(x.name):'Viewer')+' <span class="tag g">'+(x.role==='coach'?'coach':'viewer')+(x.web?' · web':'')+'</span></span><span class="t" style="width:auto">'+(now-x.t<150000?'<span class="in">now</span>':ago(now-x.t))+'</span></div>';
+  openSheet('<h2>Who has the app open</h2><div class="sub2" style="font-weight:700;color:var(--mut)">'+watching().length+' right now · '+list.length+' phones ever connected</div><div class="hist">'+(list.length?list.map(row).join(''):'Nobody yet.')+'</div><button class="btn ghost wide" data-a="close">Close</button>'); }
+function ago(ms){ const m=Math.round(ms/60000); if(m<60) return m+' min ago'; const h=Math.round(m/60); if(h<48) return h+' h ago'; return Math.round(h/24)+' d ago'; }
 /* chat channel: separate node so viewers can post and the game state is never touched */
 function chatUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/chat.json'; }
 async function pushChat(m){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ const {synced,...mm}=m; await fetch(chatUrl(),{method:'PATCH',body:JSON.stringify({[m.id]:mm}),headers:{'Content-Type':'application/json'}}); m.synced=true; }catch(e){} }
@@ -599,7 +616,7 @@ function endGame(){
   stopClock(); const c=clock(); for(const id of fieldIds()) bankGK(c,id);
   for(const id in G.ps){ const p=G.ps[id]; if(p.onField){ p.played+=Math.max(0,c-p.since);} else { p.maxBench=Math.max(p.maxBench,c-p.since);} p.since=c; p.final=true; }
   G.phase='done'; G.endClock=c;
-  const rec={date:G.date,opponent:G.opponent,score:score(),goals:G.goals||[],len:c,starting:G.starting,subs:G.subs,players:availRoster().map(p=>({id:p.id,name:p.name,num:p.num,played:G.ps[p.id]?G.ps[p.id].played:0,gkSecs:G.ps[p.id]?(G.ps[p.id].gkSecs||0):0,positions:Object.keys(G.ps[p.id]?G.ps[p.id].positions:{}),maxBench:G.ps[p.id]?G.ps[p.id].maxBench:0,start:G.starting&&Object.values(G.starting).includes(p.id)})),target:S.settings.minTarget};
+  const rec={date:G.date,opponent:G.opponent,watchers:Math.max(G.maxWatch||0,watching().length),score:score(),goals:G.goals||[],len:c,starting:G.starting,subs:G.subs,players:availRoster().map(p=>({id:p.id,name:p.name,num:p.num,played:G.ps[p.id]?G.ps[p.id].played:0,gkSecs:G.ps[p.id]?(G.ps[p.id].gkSecs||0):0,positions:Object.keys(G.ps[p.id]?G.ps[p.id].positions:{}),maxBench:G.ps[p.id]?G.ps[p.id].maxBench:0,start:G.starting&&Object.values(G.starting).includes(p.id)})),target:S.settings.minTarget};
   rec.id='g'+Date.now()+Math.random().toString(36).slice(2,6); S.history.unshift(rec); if(S.history.length>60) S.history.length=60; pushHistory(rec);
   save(); render();
 }
@@ -643,7 +660,7 @@ function renderHeader(){
   const h=$('#hdr'); const st=S.settings;
   const upd=UPD.avail?'<button class="btn ok wide" style="margin-top:8px;min-height:46px" data-a="applyupdate">⬆ Update available (v'+UPD.avail+') · tap to install</button>':'';
   if(!G || G.phase==='setup' || G.phase==='done'){
-    h.innerHTML='<div class="row"><div class="grow"><div class="lbl" style="color:var(--act)">'+esc(TEAMNAME())+(COACHNAME()?' · '+esc(COACHNAME()):'')+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="big">'+(G&&G.phase==='done'?'Final':'Before kickoff')+'</div></div>'+(isViewer()?'<span class="viewerpill">VIEWER</span>':st.testMode?'<span class="testpill">TEST MODE</span>':'')+'</div>'+upd;
+    h.innerHTML='<div class="row"><div class="grow"><div class="lbl" style="color:var(--act)">'+esc(TEAMNAME())+(COACHNAME()?' · '+esc(COACHNAME()):'')+(isViewer()?'':' <button id="presbadge" data-a="presence" style="font-weight:800;color:var(--mut)">'+(watching().length?'👀 '+watching().length:'')+'</button>')+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="big">'+(G&&G.phase==='done'?'Final':'Before kickoff')+'</div></div>'+(isViewer()?'<span class="viewerpill">VIEWER</span>':st.testMode?'<span class="testpill">TEST MODE</span>':'')+'</div>'+upd;
     return;
   }
   const c=clock(); const half=G.phase==='h1'?'1st half':G.phase==='ht'?'Halftime':'2nd half';
@@ -652,7 +669,7 @@ function renderHeader(){
   else if(G.phase==='h1'&&c>=halfSecs()) main='<button class="btn bad big flash" data-a="halftime">Halftime</button>';
   else if(G.phase==='h2'&&c>=gameSecs()) main='<button class="btn bad big flash" data-a="end">End game</button>';
   else main=G.running?'<button class="btn big" data-a="pause">Pause</button>':'<button class="btn ok big" data-a="start">'+(c>0?'Resume':'Start clock')+'</button>';
-  h.innerHTML='<div class="lbl" style="color:var(--act);margin-bottom:4px">'+esc(TEAMNAME())+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="clockrow"><button class="grow" data-a="edittime" style="text-align:left"><div class="clock" data-live="clock">'+fmt(c)+'</div><div class="half">'+half+(G.running?'':' · clock stopped')+'</div></button>'+main+'</div>'
+  h.innerHTML='<div class="lbl" style="color:var(--act);margin-bottom:4px">'+esc(TEAMNAME())+(isViewer()?'':' <button id="presbadge" data-a="presence" style="font-weight:800;color:var(--mut)">'+(watching().length?'👀 '+watching().length:'')+'</button>')+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="clockrow"><button class="grow" data-a="edittime" style="text-align:left"><div class="clock" data-live="clock">'+fmt(c)+'</div><div class="half">'+half+(G.running?'':' · clock stopped')+'</div></button>'+main+'</div>'
     +'<div class="scorebar"><button class="sbtn" data-a="goalsheet"><span class="sl">US</span><span class="sn">'+score().us+'</span></button><button class="btn ok sm" data-a="goalus_pick">+ Goal us</button><button class="sbtn" data-a="goalsheet"><span class="sl">'+esc((G.opponent||'THEM').toUpperCase().slice(0,10))+'</span><span class="sn">'+score().them+'</span></button><button class="btn bad sm" data-a="goalthem">+ Goal them</button></div>'
     +'<div class="row" style="margin-top:6px;justify-content:space-between"><span class="half edithint" style="font-size:12px">Tap the time to fix it</span>'+(G.phase==='h1'&&c<halfSecs()?'<button class="half" style="font-size:12px;text-decoration:underline" data-a="halftime">Halftime</button>':'')+(G.phase==='h2'&&c<gameSecs()?'<button class="half" style="font-size:12px;text-decoration:underline" data-a="end">End game</button>':'')+'</div>'
     +upd+(st.testMode?'<div class="testbar"><span class="lbl">Test: jump ahead</span><button class="btn" data-a="adv" data-m="1">+1 min</button><button class="btn" data-a="adv" data-m="5">+5</button><button class="btn" data-a="adv" data-m="10">+10</button></div>':'');
@@ -934,6 +951,7 @@ function act(a,d,el){
     case 'doresetstats': for(const p of S.roster){ p.games=0; p.starts=0; p.benchStarts=0; } closeSheet(); break;
     case 'gkdo': { if(isViewer()) return; const k=keeperSuggestion(clock()); if(!k) return; if(k.plan.type==='swap') swapField(k.plan.a,k.plan.b); else makeSub(k.plan.inId,G.field[gkSlot()],gkSlot(),true); return; }
     case 'gkskip': G.gkSafeDeclined=G.goals.length; break;
+    case 'presence': pullPresence().then(sheetPresence); return;
     case 'guide': guide(); return;
     case 'close': closeSheet(); return;
     case 'resume': $('#resume').remove(); return;
