@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.BB_BUILD=34;</script>
+<script>window.BB_BUILD=35;</script>
 </head><body><title>Sideline Sub</title>
 
 <style>
@@ -219,7 +219,8 @@ td.r,th.r{text-align:right}
 <script>
 'use strict';
 const SYNC_BASE='https://bridge-blue-default-rtdb.firebaseio.com'; // shared home for every team
-const ADMIN_CODE='TURNER-ADMIN';
+// Public web API key, not a password. Leave empty until MIGRATION.md step 3. Empty keeps the current open database working.
+const FIREBASE_API_KEY='';
 function TEAMNAME(){ return (S.team&&S.team.name)||'Sideline Sub'; }
 function COACHNAME(){ return (S.team&&S.team.coach)||''; }
 function CODE(){ return (S.team&&S.team.code)||''; }
@@ -255,21 +256,20 @@ const DEFAULT_SETTINGS = {formation:'7v7', gameLen:50, halfLen:25, subInterval:5
 function defaultRoster(){
   const r=(id,name,num,primary,auto,manual,group)=>({id,name,num,primary,auto,manual,group,avail:true,starts:0,benchStarts:0,games:0});
   return [
-    r('adrien','Adrien',5,'RB',['RB','RW','CB'],[],'core'),
-    r('isaiah','Isaiah',10,'RW',['RW'],[],'dev'),
-    r('bennett','Bennett',13,'GK',['GK'],[],'core'),
-    r('blake','Blake',14,'LB',['LB','RB','CB'],['GK'],'core'),
-    r('aiden','Aiden',27,'ST',['ST','CM','GK'],[],'support'),
-    r('fletcher','Fletcher',28,'ST',['ST'],[],'core'),
-    r('henry','Henry',29,'ST',['ST'],[],'core'),
-    r('landon','Landon',29,'LW',['LW'],['ST'],'core'),
-    r('cole','Cole',32,'RW',['RW','CM','GK'],[],'core'),
-    r('gray','Gray',33,'CM',['CM'],[],'dev'),
-    r('evan','Evan',34,'LB',['LB','CM','CB'],[],'dev'),
+    r('p1','Player 1',1,'GK',['GK'],[],'core'),
+    r('p2','Player 2',2,'LB',['LB','CB'],[],'core'),
+    r('p3','Player 3',3,'RB',['RB','CB'],[],'dev'),
+    r('p4','Player 4',4,'CB',['CB','LB','RB'],[],'dev'),
+    r('p5','Player 5',5,'CM',['CM'],[],'core'),
+    r('p6','Player 6',6,'LW',['LW','ST'],[],'dev'),
+    r('p7','Player 7',7,'RW',['RW','ST'],[],'support'),
+    r('p8','Player 8',8,'ST',['ST','CM'],[],'core'),
+    r('p9','Player 9',9,'CM',['CM','LW','RW'],['GK'],'dev'),
+    r('p10','Player 10',10,'ST',['ST'],[],'support'),
   ];
 }
 function defaultQueues(){
-  return {LW:['landon'],ST:['fletcher','henry','aiden'],RW:['cole','isaiah','adrien'],CM:['gray','evan','cole','aiden'],LB:['blake','evan'],RB:['adrien','blake'],CB:['blake','adrien','evan'],GK:['bennett','aiden','cole']};
+  return {LW:['p6','p9'],ST:['p8','p10','p6','p7'],RW:['p7','p9'],CM:['p5','p9','p8'],LB:['p2','p4'],RB:['p3','p4'],CB:['p4','p2','p3'],GK:['p1','p9']};
 }
 
 /* ====================== STATE / PERSIST ====================== */
@@ -287,22 +287,96 @@ function save(periodic){
   try{ localStorage.setItem(LS, JSON.stringify(S)); }catch(e){}
 }
 function isViewer(){ return S.role==='viewer'; }
-/* ====================== TEAM SYNC (Google Sheet via Apps Script) ====================== */
+/* ====================== TEAM SYNC (Firebase Realtime Database) ====================== */
 const SYNC={status:'off',last:0,timer:null,busy:false,remoteAt:0,remotePhase:'',lastErr:'',lastAction:'',pushedHash:''};
-function syncState(){ const st={...S.settings}; delete st.testMode; delete st.testTimers; delete st.autoUpdate; return {team:S.team,settings:st,roster:S.roster,queues:S.queues,game:S.game}; }
+function groupStoreKey(){ return 'sidelinesub.groups.'+(CODE()||'local'); }
+function readGroupMap(){ try{ const m=JSON.parse(localStorage.getItem(groupStoreKey())||'{}'); return m&&typeof m==='object'?m:{}; }catch(e){ return {}; } }
+function writeGroupMap(m){ try{ localStorage.setItem(groupStoreKey(), JSON.stringify(m||{})); }catch(e){} }
+function captureGroups(roster){
+  if(isViewer()||!roster) return;
+  const m=readGroupMap(); let ch=false;
+  const list=Array.isArray(roster)?roster:Object.values(roster);
+  for(const p of list){ if(p&&p.id&&p.group&&m[p.id]!==p.group){ m[p.id]=p.group; ch=true; } }
+  if(ch) writeGroupMap(m);
+}
+function applyGroups(roster){
+  if(!roster) return;
+  const list=Array.isArray(roster)?roster:Object.values(roster);
+  if(isViewer()){ for(const p of list) if(p) delete p.group; return; }
+  const m=readGroupMap();
+  for(const p of list){ if(!p) continue; p.group=m[p.id]||p.group||'dev'; }
+}
+function sharedTeam(){
+  if(!S.team) return null;
+  const team={...S.team};
+  if(team.pinV===2) delete team.pin;
+  return team;
+}
+function sharedRoster(){ return S.roster.map(p=>{ const c={...p}; delete c.group; return c; }); }
+function syncState(){
+  if(!isViewer()) captureGroups(S.roster);
+  const st={...S.settings}; delete st.testMode; delete st.testTimers; delete st.autoUpdate;
+  return {team:sharedTeam(),settings:st,roster:sharedRoster(),queues:S.queues,game:S.game};
+}
 function schedulePush(){ if(!S.syncUrl) return; clearTimeout(SYNC.timer); SYNC.timer=setTimeout(pushSync,(G&&G.phase==='setup')?400:1500); }
 function isFirebase(){ return /firebaseio\.com|firebasedatabase\.app/.test(S.syncUrl||''); }
+function isFirebaseUrl(url){ return /firebaseio\.com|firebasedatabase\.app/.test(url||''); }
 function teamPath(){ return '/teams/'+encodeURIComponent(CODE()); }
 function fbUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/state.json'; }
-async function remoteGet(){ const r=await fetch(isFirebase()?fbUrl()+'?t='+Date.now():S.syncUrl+'?t='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error('server '+r.status); const d=await r.json(); return d||{updatedAt:0,state:null}; }
+function teamRoot(code){ return S.syncUrl.replace(/\/+$/,'')+'/teams/'+encodeURIComponent(code||CODE()); }
+function secretRoot(code){ return S.syncUrl.replace(/\/+$/,'')+'/teamSecrets/'+encodeURIComponent(code||CODE()); }
+const AUTH={uid:'',token:'',refresh:'',exp:0};
+const AUTH_LS='sidelinesub.auth.v1';
+function loadAuth(){ try{ const d=JSON.parse(localStorage.getItem(AUTH_LS)||'null'); if(d&&d.refresh){ AUTH.uid=d.uid||''; AUTH.token=d.token||''; AUTH.refresh=d.refresh||''; AUTH.exp=d.exp||0; } }catch(e){} }
+function storeAuth(){ try{ localStorage.setItem(AUTH_LS, JSON.stringify({uid:AUTH.uid,token:AUTH.token,refresh:AUTH.refresh,exp:AUTH.exp})); }catch(e){} }
+let authInflight=null;
+async function doAuth(){
+  loadAuth();
+  try{
+    if(AUTH.refresh){
+      const r=await fetch('https://securetoken.googleapis.com/v1/token?key='+encodeURIComponent(FIREBASE_API_KEY),{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(AUTH.refresh)});
+      if(r.ok){ const d=await r.json(); AUTH.token=d.id_token||''; AUTH.uid=d.user_id||AUTH.uid; AUTH.refresh=d.refresh_token||AUTH.refresh; AUTH.exp=Date.now()+((+d.expires_in||3600)*1000); storeAuth(); return !!AUTH.token; }
+      AUTH.token=''; AUTH.exp=0;
+    }
+    const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key='+encodeURIComponent(FIREBASE_API_KEY),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({returnSecureToken:true})});
+    if(!r.ok) return false;
+    const d=await r.json(); AUTH.token=d.idToken||''; AUTH.uid=d.localId||''; AUTH.refresh=d.refreshToken||''; AUTH.exp=Date.now()+((+d.expiresIn||3600)*1000); storeAuth(); return !!AUTH.token;
+  }catch(e){ return false; }
+}
+function ensureAuth(){
+  if(!FIREBASE_API_KEY) return Promise.resolve(false);
+  if(AUTH.token&&AUTH.exp>Date.now()+60000) return Promise.resolve(true);
+  if(authInflight) return authInflight;
+  authInflight=doAuth().finally(()=>{ authInflight=null; });
+  return authInflight;
+}
+async function fbFetch(url, opts){
+  opts=opts||{};
+  await ensureAuth();
+  const headers={};
+  if(opts.body!=null) headers['Content-Type']='application/json';
+  let u=url;
+  if(AUTH.token&&isFirebaseUrl(url)) u+=(u.indexOf('?')>=0?'&':'?')+'auth='+encodeURIComponent(AUTH.token);
+  return fetch(u,{method:opts.method||'GET',headers,body:opts.body,cache:'no-store'});
+}
+function authLineText(){
+  if(!FIREBASE_API_KEY) return 'Sign-in is not configured yet, so coach access is not locked.';
+  if(AUTH.uid) return 'Sign-in id: '+AUTH.uid;
+  return 'Signing in…';
+}
+async function remoteGet(){ const r=await fbFetch(isFirebase()?fbUrl()+'?t='+Date.now():S.syncUrl+'?t='+Date.now()); if(!r.ok) throw new Error('server '+r.status); const d=await r.json(); return d||{updatedAt:0,state:null}; }
 async function remotePut(){ const body=JSON.stringify({updatedAt:S.updatedAt,state:syncState()});
-  if(isFirebase()){ const r=await fetch(fbUrl(),{method:'PUT',body,headers:{'Content-Type':'application/json'}}); if(!r.ok) throw new Error('put'); return {ok:true}; }
-  const r=await fetch(S.syncUrl,{method:'POST',body}); return await r.json(); }
+  if(isFirebase()){ const r=await fbFetch(fbUrl(),{method:'PUT',body}); if(!r.ok) throw new Error('put '+r.status); return {ok:true}; }
+  const r=await fetch(S.syncUrl,{method:'POST',body,headers:{'Content-Type':'application/json'}}); return await r.json(); }
 async function pushSync(){
   if(!S.syncUrl||!CODE()||SYNC.busy||isViewer()) return; SYNC.busy=true;
   try{
     if(isFirebase()){ const d=await remoteGet(); noteRemote(d);
-      if(d.updatedAt>S.updatedAt&&d.state){
+      const stripPin=!!(S.team&&S.team.pinV===2&&d.state&&d.state.team&&d.state.team.pin);
+      if(stripPin){
+        if(d.updatedAt>S.updatedAt&&d.state) adoptRemote(d);
+        S.updatedAt=Math.max(Date.now(), (d.updatedAt||0)+1); lastTeamHash='';
+      } else if(d.updatedAt>S.updatedAt&&d.state){
         if(JSON.stringify(d.state)===SYNC.pushedHash){ S.updatedAt=d.updatedAt+1; } // remote is just our own earlier push with a skewed clock
         else { adoptRemote(d); SYNC.lastAction='adopted remote (newer)'; SYNC.busy=false; syncBadge(); return; }
       } }
@@ -328,7 +402,8 @@ async function pullSync(force){
 }
 function normalize(st){ // Firebase drops empty arrays, empty objects and nulls; put them back
   st=st||{}; st.settings={...DEFAULT_SETTINGS,...(st.settings||{})}; st.team=st.team||null;
-  st.roster=(st.roster||[]).filter(Boolean).map(p=>({starts:0,benchStarts:0,games:0,avail:true,...p,auto:p.auto||[],manual:p.manual||[]}));
+  st.roster=(Array.isArray(st.roster)?st.roster:Object.values(st.roster||{})).filter(Boolean).map(p=>({starts:0,benchStarts:0,games:0,avail:true,...p,auto:p.auto||[],manual:p.manual||[]}));
+  captureGroups(st.roster); applyGroups(st.roster); if(st.team&&st.team.pinV===2) delete st.team.pin;
   st.queues=st.queues||{}; for(const pos of ROLES) st.queues[pos]=st.queues[pos]||[];
   st.chat=(st.chat||[]).filter(Boolean).slice(-200);
   st.history=(st.history||[]).filter(Boolean).map(g=>({...g,id:g.id||('g'+new Date(g.date).getTime()),subs:g.subs||[],players:g.players||[],starting:g.starting||{}}));
@@ -336,15 +411,15 @@ function normalize(st){ // Firebase drops empty arrays, empty objects and nulls;
   else st.game=null;
   return st;
 }
-function adoptRemote(d){ const _r=()=>{ applyFormation(); }; const keep={testMode:S.settings.testMode,testTimers:S.settings.testTimers,autoUpdate:S.settings.autoUpdate}; const chat=S.chat||[]; const hist=S.history||[]; Object.assign(S,normalize(d.state)); Object.assign(S.settings,keep); S.chat=chat; { const ids=new Set(hist.map(g=>g.id).filter(Boolean)); for(const g of (S.history||[])) if(!g.id||!ids.has(g.id)) hist.push(g); S.history=hist; } applyFormation(); lastTeamHash=JSON.stringify(syncState()); SYNC.pushedHash=lastTeamHash; S.updatedAt=d.updatedAt; SYNC.status='ok'; SYNC.last=Date.now(); try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} syncQueues(); render(); }
+function adoptRemote(d){ const keepPinV=!!(S.team&&S.team.pinV===2); const keep={testMode:S.settings.testMode,testTimers:S.settings.testTimers,autoUpdate:S.settings.autoUpdate}; const chat=S.chat||[]; const hist=S.history||[]; Object.assign(S,normalize(d.state)); if(keepPinV&&S.team){ S.team.pinV=2; delete S.team.pin; } Object.assign(S.settings,keep); S.chat=chat; { const ids=new Set(hist.map(g=>g.id).filter(Boolean)); for(const g of (S.history||[])) if(!g.id||!ids.has(g.id)) hist.push(g); S.history=hist; } applyFormation(); lastTeamHash=JSON.stringify(syncState()); SYNC.pushedHash=lastTeamHash; S.updatedAt=d.updatedAt; SYNC.status='ok'; SYNC.last=Date.now(); try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} syncQueues(); render(); }
 function syncDiag(){ const t=v=>v?new Date(v).toLocaleTimeString():'never'; const g=S.game; return 'This phone: role '+(S.role||'?')+' · state stamped '+t(S.updatedAt)+' · game '+(g?g.phase:'none')+'<br>Team store: stamped '+t(SYNC.remoteAt)+' · game '+(SYNC.remotePhase||'?')+'<br>Phone clock now '+t(Date.now())+' · last: '+(SYNC.lastAction||'nothing yet')+(SYNC.lastErr?'<br>Error: '+esc(SYNC.lastErr):''); }
 function syncBadge(){ const el=document.getElementById('syncbadge'); if(!el) return; el.textContent=syncText(); el.style.color=SYNC.status==='err'?'var(--bad)':'var(--mut)'; }
 function syncText(){ if(!S.syncUrl||!CODE()) return ''; if(SYNC.status==='err') return '⚠ not synced'; if(SYNC.status==='ok') return '● synced '+Math.max(0,Math.round((Date.now()-SYNC.last)/1000))+'s ago'; return '○ sync…'; }
 setInterval(()=>{ if(S.syncUrl && !document.hidden && (!isViewer()||Date.now()%10000<5000)) pullSync(); }, 5000);
 /* history channel: append-only per-game records so no phone can overwrite another's games */
 function histUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games.json'; }
-async function pushHistory(rec){ if(!S.syncUrl||!CODE()||!isFirebase()||!rec.id) return; try{ await fetch(histUrl(),{method:'PATCH',body:JSON.stringify({[rec.id]:rec}),headers:{'Content-Type':'application/json'}}); rec.synced=true; save(true); }catch(e){} }
-async function pullHistory(){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ const r=await fetch(histUrl()+'?t='+Date.now(),{cache:'no-store'}); const d=await r.json()||{}; const have=new Set((S.history||[]).map(g=>g.id).filter(Boolean)); let changed=false;
+async function pushHistory(rec){ if(!S.syncUrl||!CODE()||!isFirebase()||!rec.id) return; try{ const r=await fbFetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games/'+encodeURIComponent(rec.id)+'.json',{method:'PUT',body:JSON.stringify(rec)}); if(!r.ok) return; rec.synced=true; save(true); }catch(e){} }
+async function pullHistory(){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ const r=await fbFetch(histUrl()+'?t='+Date.now()); const d=await r.json()||{}; const have=new Set((S.history||[]).map(g=>g.id).filter(Boolean)); let changed=false;
   for(const k in d){ const g=d[k]; if(g&&g.id&&!have.has(g.id)){ S.history.push({...g,synced:true}); changed=true; } }
   // back-fill: local games that never made it up
   for(const g of S.history){ if(g.id&&!g.synced&&!d[g.id]) await pushHistory(g); }
@@ -354,9 +429,9 @@ setInterval(()=>{ if(S.syncUrl && !document.hidden) pullHistory(); }, 30000); se
 const PRES={list:[],last:0};
 function presUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/presence'; }
 async function heartbeat(){ if(!S.syncUrl||!CODE()||!isFirebase()||document.hidden) return;
-  try{ await fetch(presUrl()+'/'+S.devId+'.json',{method:'PUT',body:JSON.stringify({name:S.chatName||'',role:S.role||'viewer',t:Date.now(),v:APP_VERSION,web:!IS_APK}),headers:{'Content-Type':'application/json'}}); }catch(e){} }
+  try{ const authed=await ensureAuth(); const id=(authed&&AUTH.uid)?AUTH.uid:S.devId; if(FIREBASE_API_KEY&&!authed) return; const name=String(S.chatName||'').slice(0,40); await fbFetch(presUrl()+'/'+encodeURIComponent(id)+'.json',{method:'PUT',body:JSON.stringify({name,role:S.role==='coach'?'coach':'viewer',t:Date.now(),v:APP_VERSION,web:!IS_APK})}); }catch(e){} }
 async function pullPresence(){ if(!S.syncUrl||!CODE()||!isFirebase()||isViewer()) return;
-  try{ const r=await fetch(presUrl()+'.json?t='+Date.now(),{cache:'no-store'}); const d=await r.json()||{}; PRES.list=Object.entries(d).map(([id,x])=>({id,...x})); PRES.last=Date.now(); presBadge(); trackWatch(); }catch(e){} }
+  try{ const r=await fbFetch(presUrl()+'.json?t='+Date.now()); const d=await r.json()||{}; PRES.list=Object.entries(d).map(([id,x])=>({id,...x})); PRES.last=Date.now(); presBadge(); trackWatch(); }catch(e){} }
 function trackWatch(){ if(G&&['h1','ht','h2'].includes(G.phase)){ G.maxWatch=Math.max(G.maxWatch||0,watching().length); } }
 function watching(){ const cut=Date.now()-150000; return PRES.list.filter(x=>x.t>cut); }
 function presBadge(){ const el=document.getElementById('presbadge'); if(el) el.textContent=watching().length?('👀 '+watching().length):''; }
@@ -369,39 +444,12 @@ function sheetPresence(){ const now=Date.now(); const list=PRES.list.slice().sor
 function ago(ms){ const m=Math.round(ms/60000); if(m<60) return m+' min ago'; const h=Math.round(m/60); if(h<48) return h+' h ago'; return Math.round(h/24)+' d ago'; }
 /* chat channel: separate node so viewers can post and the game state is never touched */
 function chatUrl(){ return S.syncUrl.replace(/\/+$/,'')+teamPath()+'/chat.json'; }
-async function pushChat(m){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ const {synced,...mm}=m; await fetch(chatUrl(),{method:'PATCH',body:JSON.stringify({[m.id]:mm}),headers:{'Content-Type':'application/json'}}); m.synced=true; }catch(e){} }
-async function deleteChat(id){ S.chat=(S.chat||[]).filter(m=>m.id!==id); save(true); render(); if(S.syncUrl&&CODE()&&isFirebase()){ try{ await fetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/chat/'+encodeURIComponent(id)+'.json',{method:'DELETE'}); }catch(e){} } }
-async function clearChat(){ S.chat=[]; save(true); render(); if(S.syncUrl&&CODE()&&isFirebase()){ try{ await fetch(chatUrl(),{method:'DELETE'}); }catch(e){} } }
-async function pullChat(){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ const r=await fetch(chatUrl()+'?t='+Date.now(),{cache:'no-store'}); const d=await r.json()||{}; const ids=new Set((S.chat||[]).map(m=>m.id)); let added=0; const live=new Set(Object.keys(d)); const before=S.chat.length; S.chat=S.chat.filter(m=>live.has(m.id)||!m.synced); if(S.chat.length!==before) added++; for(const k in d){ const m=d[k]; if(m&&m.id&&!ids.has(m.id)){ S.chat.push({...m,synced:true}); added++; } else if(m&&m.id&&ids.has(m.id)){ const x=S.chat.find(q=>q.id===m.id); if(x) x.synced=true; } } if(added){ S.chat.sort((a,b)=>a.t-b.t); S.chat=S.chat.slice(-200); save(true); if(S.tab==='chat') render(); else renderNav(); } }catch(e){} }
+async function pushChat(m){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ await ensureAuth(); if(AUTH.uid) m.uid=AUTH.uid; const {synced,...mm}=m; const r=await fbFetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/chat/'+encodeURIComponent(m.id)+'.json',{method:'PUT',body:JSON.stringify(mm)}); if(r.ok) m.synced=true; }catch(e){} }
+async function deleteChat(id){ S.chat=(S.chat||[]).filter(m=>m.id!==id); save(true); render(); if(S.syncUrl&&CODE()&&isFirebase()){ try{ await fbFetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/chat/'+encodeURIComponent(id)+'.json',{method:'DELETE'}); }catch(e){} } }
+async function clearChat(){ S.chat=[]; save(true); render(); if(S.syncUrl&&CODE()&&isFirebase()){ try{ await fbFetch(chatUrl(),{method:'DELETE'}); }catch(e){} } }
+async function pullChat(){ if(!S.syncUrl||!CODE()||!isFirebase()) return; try{ const r=await fbFetch(chatUrl()+'?t='+Date.now()); const d=await r.json()||{}; const ids=new Set((S.chat||[]).map(m=>m.id)); let added=0; const live=new Set(Object.keys(d)); const before=S.chat.length; S.chat=S.chat.filter(m=>live.has(m.id)||!m.synced); if(S.chat.length!==before) added++; for(const k in d){ const m=d[k]; if(m&&m.id&&!ids.has(m.id)){ S.chat.push({...m,synced:true}); added++; } else if(m&&m.id&&ids.has(m.id)){ const x=S.chat.find(q=>q.id===m.id); if(x) x.synced=true; } } if(added){ S.chat.sort((a,b)=>a.t-b.t); S.chat=S.chat.slice(-200); save(true); if(S.tab==='chat') render(); else renderNav(); } }catch(e){} }
 setInterval(()=>{ if(S.syncUrl && !document.hidden) pullChat(); }, 8000);
-/* ====================== APP UPDATES (HTML bundle via Firebase) ====================== */
-const UPD={avail:0,busy:false};
-function appUrl(path){ return S.syncUrl.replace(/\/+$/,'')+'/app'+path+'.json'; }
-async function checkUpdate(){
-  if(!IS_APK||!S.syncUrl||!isFirebase()) return;
-  try{ const r=await fetch(appUrl('/v')+'?t='+Date.now(),{cache:'no-store'}); const v=Number(await r.json())||0;
-    if(v>APP_VERSION){ UPD.avail=v; const live=G&&['h1','ht','h2'].includes(G.phase); if(S.settings.autoUpdate&&!live) applyUpdate(); else renderHeader(); } else UPD.avail=0;
-  }catch(e){}
-}
-async function applyUpdate(){
-  if(UPD.busy) return; UPD.busy=true;
-  try{ const r=await fetch(appUrl('')+'?t='+Date.now(),{cache:'no-store'}); const b=await r.json();
-    if(b&&b.v>APP_VERSION&&b.html&&b.html.length>20000&&b.html.includes('BB_BUILD')&&window.BBNative&&BBNative.save(b.v,b.html)){ BBNative.restart(); return; }
-  }catch(e){}
-  UPD.busy=false; UPD.avail=0; renderHeader();
-}
-function currentHtml(){ return new Promise((res,rej)=>{
-  if(window.BB_FROM_BUNDLE){ return res(document.documentElement.outerHTML.replace(/^<script>window\.BB_FROM_BUNDLE=\d+;<\/script>/,'')); }
-  const x=new XMLHttpRequest(); x.open('GET','index.html'); x.onload=()=>res(x.responseText); x.onerror=rej; x.send(); }); }
-async function pushUpdate(){
-  if(!IS_APK||!S.syncUrl){ openSheet('<h2>Only works in the Android app</h2><button class="btn ghost wide" data-a="close">Close</button>'); return; }
-  try{ const html=await currentHtml();
-    const r=await fetch(appUrl(''),{method:'PUT',body:JSON.stringify({v:APP_VERSION,html,at:Date.now()}),headers:{'Content-Type':'application/json'}}); if(!r.ok) throw new Error('put');
-    openSheet('<h2>Version '+APP_VERSION+' sent to all teams</h2><div class="sub2" style="font-weight:700;color:var(--mut)">Other phones get it within a minute: automatically when no game is live, otherwise a tap-to-update banner.</div><button class="btn ghost wide" data-a="close">Close</button>');
-  }catch(e){ openSheet('<h2>Could not send</h2><div class="sub2">Check signal and the Team sync address.</div><button class="btn ghost wide" data-a="close">Close</button>'); }
-}
-function useBuiltIn(){ if(window.BBNative){ BBNative.clear(); BBNative.restart(); } }
-setInterval(()=>{ if(!document.hidden) checkUpdate(); }, 60000); setTimeout(checkUpdate,3000);
+// App updates ship as a new copy of the app. Do not download or install HTML from the database.
 setInterval(syncBadge,1000);
 let G = null; // alias for S.game
 function syncQueues(){
@@ -605,12 +653,12 @@ function addGoal(us,scorerId){ pushUndo(); G.goals=G.goals||[]; G.goals.push({t:
 function removeGoal(id){ G.goals=(G.goals||[]).filter(x=>x.id!==id); save(); render(); }
 function sheetGoal(){
   const onf=fieldIds().map(player), bench=benchIds().map(player);
-  const row=p=>'<button class="opt" data-a="goalus" data-id="'+p.id+'"><div class="nm">'+nm(p)+'</div><span class="arrow">⚽</span></button>';
+  const row=p=>'<button class="opt" data-a="goalus" data-id="'+esc(p.id)+'"><div class="nm">'+nm(p)+'</div><span class="arrow">⚽</span></button>';
   openSheet('<h2>Who scored?</h2><div class="sec">On the field</div>'+onf.map(row).join('')+'<div class="sec">Bench</div>'+bench.map(row).join('')+'<button class="btn ghost wide" data-a="goalus" data-id="">Not sure / own goal</button><button class="btn ghost wide" data-a="close">Cancel</button>');
 }
 function sheetGoals(){
   const gl=(G.goals||[]).slice().reverse(); const sc=score();
-  openSheet('<h2>Goals · '+sc.us+' – '+sc.them+'</h2>'+(gl.length?'<div class="hist">'+gl.map(x=>'<div class="log"><span class="t">'+fmt(x.t)+'</span><span class="grow">'+(x.us?'<span class="in">'+(x.scorerId&&player(x.scorerId)?esc(player(x.scorerId).name):'Us')+'</span>':'<span class="outc">'+(G.opponent?esc(G.opponent):'Them')+'</span>')+'</span><button class="btn sm ghost" data-a="goaldel" data-id="'+x.id+'">✕</button></div>').join('')+'</div>':'<div class="card">No goals yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
+  openSheet('<h2>Goals · '+sc.us+' – '+sc.them+'</h2>'+(gl.length?'<div class="hist">'+gl.map(x=>'<div class="log"><span class="t">'+fmt(x.t)+'</span><span class="grow">'+(x.us?'<span class="in">'+(x.scorerId&&player(x.scorerId)?esc(player(x.scorerId).name):'Us')+'</span>':'<span class="outc">'+(G.opponent?esc(G.opponent):'Them')+'</span>')+'</span><button class="btn sm ghost" data-a="goaldel" data-id="'+esc(x.id)+'">✕</button></div>').join('')+'</div>':'<div class="card">No goals yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
 }
 function endGame(){
   stopClock(); const c=clock(); for(const id of fieldIds()) bankGK(c,id);
@@ -646,7 +694,7 @@ function suggestLineup(){
 
 /* ====================== RENDER ====================== */
 const $=s=>document.querySelector(s);
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function nm(p){ return esc(p.name)+' <small>#'+esc(p.num)+'</small>'; }
 function render(){ G=S.game; document.body.classList.toggle('ro',isViewer());
   try{ renderHeader(); }catch(e){ $('#hdr').innerHTML='<div class="warn">Header error: '+esc(e.message)+'</div>'; }
@@ -658,9 +706,8 @@ function renderNav(){ document.querySelectorAll('#nav button').forEach(b=>{ b.cl
 
 function renderHeader(){
   const h=$('#hdr'); const st=S.settings;
-  const upd=UPD.avail?'<button class="btn ok wide" style="margin-top:8px;min-height:46px" data-a="applyupdate">⬆ Update available (v'+UPD.avail+') · tap to install</button>':'';
   if(!G || G.phase==='setup' || G.phase==='done'){
-    h.innerHTML='<div class="row"><div class="grow"><div class="lbl" style="color:var(--act)">'+esc(TEAMNAME())+(COACHNAME()?' · '+esc(COACHNAME()):'')+(isViewer()?'':' <button id="presbadge" data-a="presence" style="font-weight:800;color:var(--mut)">'+(watching().length?'👀 '+watching().length:'')+'</button>')+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="big">'+(G&&G.phase==='done'?'Final':'Before kickoff')+'</div></div>'+(isViewer()?'<span class="viewerpill">VIEWER</span>':st.testMode?'<span class="testpill">TEST MODE</span>':'')+'</div>'+upd;
+    h.innerHTML='<div class="row"><div class="grow"><div class="lbl" style="color:var(--act)">'+esc(TEAMNAME())+(COACHNAME()?' · '+esc(COACHNAME()):'')+(isViewer()?'':' <button id="presbadge" data-a="presence" style="font-weight:800;color:var(--mut)">'+(watching().length?'👀 '+watching().length:'')+'</button>')+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="big">'+(G&&G.phase==='done'?'Final':'Before kickoff')+'</div></div>'+(isViewer()?'<span class="viewerpill">VIEWER</span>':st.testMode?'<span class="testpill">TEST MODE</span>':'')+'</div>';
     return;
   }
   const c=clock(); const half=G.phase==='h1'?'1st half':G.phase==='ht'?'Halftime':'2nd half';
@@ -672,14 +719,14 @@ function renderHeader(){
   h.innerHTML='<div class="lbl" style="color:var(--act);margin-bottom:4px">'+esc(TEAMNAME())+(isViewer()?'':' <button id="presbadge" data-a="presence" style="font-weight:800;color:var(--mut)">'+(watching().length?'👀 '+watching().length:'')+'</button>')+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="clockrow"><button class="grow" data-a="edittime" style="text-align:left"><div class="clock" data-live="clock">'+fmt(c)+'</div><div class="half">'+half+(G.running?'':' · clock stopped')+'</div></button>'+main+'</div>'
     +'<div class="scorebar"><button class="sbtn" data-a="goalsheet"><span class="sl">US</span><span class="sn">'+score().us+'</span></button><button class="btn ok sm" data-a="goalus_pick">+ Goal us</button><button class="sbtn" data-a="goalsheet"><span class="sl">'+esc((G.opponent||'THEM').toUpperCase().slice(0,10))+'</span><span class="sn">'+score().them+'</span></button><button class="btn bad sm" data-a="goalthem">+ Goal them</button></div>'
     +'<div class="row" style="margin-top:6px;justify-content:space-between"><span class="half edithint" style="font-size:12px">Tap the time to fix it</span>'+(G.phase==='h1'&&c<halfSecs()?'<button class="half" style="font-size:12px;text-decoration:underline" data-a="halftime">Halftime</button>':'')+(G.phase==='h2'&&c<gameSecs()?'<button class="half" style="font-size:12px;text-decoration:underline" data-a="end">End game</button>':'')+'</div>'
-    +upd+(st.testMode?'<div class="testbar"><span class="lbl">Test: jump ahead</span><button class="btn" data-a="adv" data-m="1">+1 min</button><button class="btn" data-a="adv" data-m="5">+5</button><button class="btn" data-a="adv" data-m="10">+10</button></div>':'');
+    +(st.testMode?'<div class="testbar"><span class="lbl">Test: jump ahead</span><button class="btn" data-a="adv" data-m="1">+1 min</button><button class="btn" data-a="adv" data-m="5">+5</button><button class="btn" data-a="adv" data-m="10">+10</button></div>':'');
 }
 
 function bubble(pos,id,c,extra){
   const P=POS.find(p=>p.id===pos);
-  if(!id) return '<button class="bub empty" style="left:'+P.x+'%;top:'+P.y+'%" data-a="pickfor" data-pos="'+pos+'"><div class="pos" style="color:#fff">'+ROLE[pos]+'</div><div class="nm">Tap to assign</div></button>';
+  if(!id) return '<button class="bub empty" style="left:'+P.x+'%;top:'+P.y+'%" data-a="pickfor" data-pos="'+esc(pos)+'"><div class="pos" style="color:#fff">'+ROLE[pos]+'</div><div class="nm">Tap to assign</div></button>';
   const p=player(id);
-  return '<button class="bub '+(extra||'')+'" style="left:'+P.x+'%;top:'+P.y+'%" data-a="fieldtap" data-id="'+id+'"><div class="pos">'+ROLE[pos]+'</div><div class="nm">'+nm(p)+'</div><div class="tm" data-live="pl:'+id+'">'+(G.phase==='setup'?'':fmt(played(id,c)))+'</div></button>';
+  return '<button class="bub '+(extra||'')+'" style="left:'+P.x+'%;top:'+P.y+'%" data-a="fieldtap" data-id="'+esc(id)+'"><div class="pos">'+ROLE[pos]+'</div><div class="nm">'+nm(p)+'</div><div class="tm" data-live="'+esc('pl:'+id)+'">'+(G.phase==='setup'?'':fmt(played(id,c)))+'</div></button>';
 }
 
 function viewGame(){
@@ -714,8 +761,8 @@ function recCard(rec,c,due){
   let h='<div class="rec '+(due?'due':'')+'"><div class="lbl" style="font-size:15px;color:'+(due?'var(--sub)':'var(--mut)')+'">'+title+'</div>';
   picks.forEach((f,i)=>{ const pi=player(f.inId), po=player(f.outId);
     h+='<div class="pick'+(i?' pick2':'')+'"><div class="sent'+(multi?' small':'')+'"><span class="in">'+esc(pi.name)+'</span> in at <b>'+esc(PNAME[f.pos])+'</b>'+(multi?' ':'<br>')+'for <span class="outc">'+esc(po.name)+'</span></div>'
-      +'<div class="why">'+esc(pi.name)+' sat <span data-live="bs:'+pi.id+'">'+fmt(benchStint(pi.id,c))+'</span> · '+esc(po.name)+' played <span data-live="fs:'+po.id+'">'+fmt(fieldStint(po.id,c))+'</span> straight'+(multi&&!isViewer()?' <button class="btn sm ghost" style="min-height:34px;font-size:12px;padding:4px 10px;margin-left:6px" data-a="makesub" data-in="'+f.inId+'" data-out="'+f.outId+'" data-pos="'+f.pos+'">Just this one</button>':'')+'</div></div>'; });
-  h+='<div class="acts"><button class="btn sub big" data-a="'+(multi?'makeall':'makesub')+'" data-in="'+rec.first.inId+'" data-out="'+rec.first.outId+'" data-pos="'+rec.first.pos+'">'+(multi?'Make both':'Make this sub').replace('both',picks.length===3?'all 3':'both')+'</button><button class="btn" data-a="altsub">Other<br>option</button></div></div>';
+      +'<div class="why">'+esc(pi.name)+' sat <span data-live="'+esc('bs:'+pi.id)+'">'+fmt(benchStint(pi.id,c))+'</span> · '+esc(po.name)+' played <span data-live="'+esc('fs:'+po.id)+'">'+fmt(fieldStint(po.id,c))+'</span> straight'+(multi&&!isViewer()?' <button class="btn sm ghost" style="min-height:34px;font-size:12px;padding:4px 10px;margin-left:6px" data-a="makesub" data-in="'+esc(f.inId)+'" data-out="'+esc(f.outId)+'" data-pos="'+esc(f.pos)+'">Just this one</button>':'')+'</div></div>'; });
+  h+='<div class="acts"><button class="btn sub big" data-a="'+esc(multi?'makeall':'makesub')+'" data-in="'+esc(rec.first.inId)+'" data-out="'+esc(rec.first.outId)+'" data-pos="'+esc(rec.first.pos)+'">'+(multi?'Make both':'Make this sub').replace('both',picks.length===3?'all 3':'both')+'</button><button class="btn" data-a="altsub">Other<br>option</button></div></div>';
   return h;
 }
 function benchList(rec,c){
@@ -723,15 +770,15 @@ function benchList(rec,c){
   for(const x of rec.list){ if(!(x.inId in rank)) rank[x.inId]=r++; }
   b.sort((a,b2)=>(rank[a]||99)-(rank[b2]||99) || benchStint(b2,c)-benchStint(a,c));
   return b.map((id,i)=>{ const p=player(id), s=ptStatus(id,c), isNext=rec.first&&rec.first.inId===id;
-    return '<button class="bp '+(s.code==='priority'||s.code==='cant'?'pri':'')+(isNext?' nx':'')+'" data-a="benchtap" data-id="'+id+'"><div class="grow"><div class="nm">'+esc(p.name)+(isNext?' <span class="tag" style="background:var(--sub);color:#fff">next in</span>':'')+'</div><div class="ps">Plays '+p.auto.join(', ')+'</div></div><div class="st">Sitting <b data-live="bs:'+id+'">'+fmt(benchStint(id,c))+'</b><br>Played <b data-live="pl:'+id+'">'+fmt(played(id,c))+'</b></div></button>'; }).join('');
+    return '<button class="bp '+(s.code==='priority'||s.code==='cant'?'pri':'')+(isNext?' nx':'')+'" data-a="benchtap" data-id="'+esc(id)+'"><div class="grow"><div class="nm">'+esc(p.name)+(isNext?' <span class="tag" style="background:var(--sub);color:#fff">next in</span>':'')+'</div><div class="ps">Plays '+p.auto.join(', ')+'</div></div><div class="st">Sitting <b data-live="'+esc('bs:'+id)+'">'+fmt(benchStint(id,c))+'</b><br>Played <b data-live="'+esc('pl:'+id)+'">'+fmt(played(id,c))+'</b></div></button>'; }).join('');
 }
 function viewSetup(){
   const c=0; const full=!POSID.some(p=>!G.field[p]); const avail=availRoster(); const out=S.roster.filter(p=>!p.avail);
-  let h='<div class="card"><div class="lbl">Step 1 · Who is here today?</div><div style="font-weight:700;margin:4px 0 8px">'+avail.length+' here'+(out.length?', '+out.length+' out ('+out.map(p=>esc(p.name)).join(', ')+')':'')+'. Tap a name to toggle.</div><div class="chips">'+S.roster.map(p=>'<button class="chip '+(p.avail?'on':'')+'" data-a="toggleavail" data-id="'+p.id+'">'+esc(p.name)+'</button>').join('')+'</div></div>';
+  let h='<div class="card"><div class="lbl">Step 1 · Who is here today?</div><div style="font-weight:700;margin:4px 0 8px">'+avail.length+' here'+(out.length?', '+out.length+' out ('+out.map(p=>esc(p.name)).join(', ')+')':'')+'. Tap a name to toggle.</div><div class="chips">'+S.roster.map(p=>'<button class="chip '+(p.avail?'on':'')+'" data-a="toggleavail" data-id="'+esc(p.id)+'">'+esc(p.name)+'</button>').join('')+'</div></div>';
   h+='<div class="card"><div class="lbl">Step 2 · Starting '+POSID.length+'</div><div style="font-weight:700;margin:4px 0 8px">Tap <b>Suggest</b> to fill the field. Tap again for a different mix. Tap any spot to change it by hand.</div><div class="row"><button class="btn act grow" data-a="suggest">'+(G.suggestN?'Suggest another':'Suggest lineup')+'</button><button class="btn ghost" data-a="clearlineup">Clear</button></div></div>';
   h+='<div class="pitch'+(POSID.length>7?' big':'')+'">'+POSID.map(pos=>bubble(pos,G.field[pos],c,'')).join('')+'</div>';
   const bench=benchIds();
-  h+='<div class="lbl">Starting on the bench</div><div class="bench">'+(bench.length?bench.map(id=>{const p=player(id);return '<button class="bp" data-a="setuppick" data-id="'+id+'"><div class="grow"><div class="nm">'+esc(p.name)+'</div><div class="ps">Plays '+p.auto.join(', ')+' · '+(st=>st.games?'started '+st.starts+' of '+st.games+' games':'no games yet')(seasonStats(p.id))+'</div></div><div class="st">Tap to<br>place</div></button>';}).join(''):'<div class="card">Nobody. Pick '+POSID.length+' starters.</div>')+'</div>';
+  h+='<div class="lbl">Starting on the bench</div><div class="bench">'+(bench.length?bench.map(id=>{const p=player(id);return '<button class="bp" data-a="setuppick" data-id="'+esc(id)+'"><div class="grow"><div class="nm">'+esc(p.name)+'</div><div class="ps">Plays '+p.auto.join(', ')+' · '+(st=>st.games?'started '+st.starts+' of '+st.games+' games':'no games yet')(seasonStats(p.id))+'</div></div><div class="st">Tap to<br>place</div></button>';}).join(''):'<div class="card">Nobody. Pick '+POSID.length+' starters.</div>')+'</div>';
   h+='<div class="card"><div class="lbl">Step 3 · Kickoff</div><div class="field" style="margin-top:6px"><label for="opp">Opponent (optional)</label><input id="opp" value="'+esc(G.opponent||'')+'" placeholder="e.g. Tigers"></div>'
     +'<button class="btn ok big wide" style="margin-top:10px" data-a="kickoff" '+(full?'':'disabled')+'>'+(full?'Kickoff':'Fill all '+POSID.length+' spots first')+'</button></div>';
   return h;
@@ -762,20 +809,20 @@ function viewRoster(){
   const inGame=G&&G.phase!=='setup'&&G.phase!=='done';
   let h='<div class="row"><div class="lbl grow">Roster · '+availRoster().length+' of '+S.roster.length+' available today</div>'+(isViewer()?'':'<button class="btn sm act" data-a="addplayer">+ Add</button>')+'</div>';
   if(inGame) h+='<div class="card" style="font-weight:700">Game in progress. Edits apply immediately; mark a player out today to drop him from the bench.</div>';
-  h+='<div class="bench">'+S.roster.map(p=>'<div class="rp '+(p.avail?'':'off')+'">'+(isViewer()?'<div class="grow">':'<button class="grow" style="text-align:left" data-a="editplayer" data-id="'+p.id+'">')+'<div class="nm">'+nm(p)+(p.avail?'':' <span class="tag b">out today</span>')+'</div><div class="ps">'+p.primary+' primary · auto '+p.auto.join('/')+(p.manual.length?' · manual '+p.manual.join('/'):'')+' · '+(st=>st.games?('started '+st.starts+' of '+st.games+' · '+fmt(st.secs)+' this season'):'no games yet')(seasonStats(p.id))+'</div>'+(isViewer()?'</div>':'</button><button class="btn sm '+(p.avail?'ghost':'bad')+'" data-a="toggleavail" data-id="'+p.id+'">'+(p.avail?'Out today':'In')+'</button>')+'</div>').join('')+'</div>';
+  h+='<div class="bench">'+S.roster.map(p=>'<div class="rp '+(p.avail?'':'off')+'">'+(isViewer()?'<div class="grow">':'<button class="grow" style="text-align:left" data-a="editplayer" data-id="'+esc(p.id)+'">')+'<div class="nm">'+nm(p)+(p.avail?'':' <span class="tag b">out today</span>')+'</div><div class="ps">'+p.primary+' primary · auto '+p.auto.join('/')+(p.manual.length?' · manual '+p.manual.join('/'):'')+' · '+(st=>st.games?('started '+st.starts+' of '+st.games+' · '+fmt(st.secs)+' this season'):'no games yet')(seasonStats(p.id))+'</div>'+(isViewer()?'</div>':'</button><button class="btn sm '+(p.avail?'ghost':'bad')+'" data-a="toggleavail" data-id="'+esc(p.id)+'">'+(p.avail?'Out today':'In')+'</button>')+'</div>').join('')+'</div>';
   return h;
 }
 
 function viewChat(){
   const me=S.chatName||'';
   let h='<div class="row"><div class="lbl grow">Team chat'+(S.syncUrl?'':' · set up Team sync in Settings to share')+'</div><button class="btn sm ghost" data-a="chatname">'+(me?esc(me):'Set your name')+'</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="chatclear">Clear</button>')+'</div>';
-  h+='<div class="chatlist" id="chatlist">'+((S.chat||[]).length?S.chat.map(m=>'<div class="msg '+(m.from===me?'me':'')+'"><div class="mh">'+esc(m.from||'?')+' · '+new Date(m.t).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+(m.clock!=null?' · '+fmt(m.clock):'')+((!isViewer()||m.from===me)?' <button class="mdel" data-a="chatdel" data-id="'+m.id+'" aria-label="Delete">✕</button>':'')+'</div><div class="mb">'+esc(m.text)+'</div></div>').join(''):'<div class="card">No messages yet.</div>')+'</div>';
-  h+='<div class="chips">'+['On my way','Running late','Need a sub','Water break','Great goal!'].map(q=>'<button class="chip" data-a="chatquick" data-q="'+q+'">'+q+'</button>').join('')+'</div>';
+  h+='<div class="chatlist" id="chatlist">'+((S.chat||[]).length?S.chat.map(m=>'<div class="msg '+(m.from===me?'me':'')+'"><div class="mh">'+esc(m.from||'?')+' · '+new Date(m.t).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+(m.clock!=null?' · '+fmt(m.clock):'')+((!isViewer()||m.from===me)?' <button class="mdel" data-a="chatdel" data-id="'+esc(m.id)+'" aria-label="Delete">✕</button>':'')+'</div><div class="mb">'+esc(m.text)+'</div></div>').join(''):'<div class="card">No messages yet.</div>')+'</div>';
+  h+='<div class="chips">'+['On my way','Running late','Need a sub','Water break','Great goal!'].map(q=>'<button class="chip" data-a="chatquick" data-q="'+esc(q)+'">'+q+'</button>').join('')+'</div>';
   h+='<form class="row" id="chatform"><input id="chatin" class="grow" placeholder="Message" autocomplete="off"><button class="btn act" type="submit">Send</button></form>';
   return h;
 }
-function sendChat(text){ text=(text||'').trim(); if(!text) return; if(!S.chatName){ sheetChatName(text); return; }
-  S.chat=S.chat||[]; const m={id:uid(),t:Date.now(),from:S.chatName,text,clock:(G&&G.phase!=='setup'&&G.phase!=='done')?Math.round(clock()):null}; S.chat.push(m); S.chat.slice(-200); save(true); pushChat(m); render(); }
+function sendChat(text){ text=(text||'').trim().slice(0,500); if(!text) return; if(!S.chatName){ sheetChatName(text); return; }
+  S.chat=S.chat||[]; const m={id:uid(),t:Date.now(),from:String(S.chatName).slice(0,40),text,clock:(G&&G.phase!=='setup'&&G.phase!=='done')?Math.round(clock()):null}; S.chat.push(m); S.chat=S.chat.slice(-200); save(true); pushChat(m); render(); }
 function sheetChatName(pending){ openSheet('<h2>Your name</h2><div class="sub2" style="font-weight:700;color:var(--mut)">Shown on your messages. Once per phone.</div><input id="cn" value="'+esc(S.chatName||'')+'" placeholder="Coach Turner"><button class="btn act big wide" data-a="chatnamesave" data-pending="'+esc(pending||'')+'">Save</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
 /* Queues */
 function viewQueues(){
@@ -799,22 +846,23 @@ function viewMinutes(){
 function viewSettingsViewer(tog){
   return '<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: Viewer · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div></div>'
     +'<div class="row"><button class="btn act grow" data-a="history">Season results &amp; minutes</button></div>'
-    +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+'</div>'+(IS_APK?tog('autoUpdate','Install updates automatically',''):'')+'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="forcepull">Refresh from team</button>'+(IS_APK?'<button class="btn sm ghost" data-a="checkupdate">Check for update</button>':'')+'</div></div>';
+    +'<div style="font-size:13px;color:var(--mut);font-weight:700">Names, numbers, the lineup, score, and chat are shared with this team.</div>'
+    +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(IS_APK?' (Android)':' (web)')+'</div><div style="font-size:14px;font-weight:700;color:var(--mut);margin-top:6px">This app does not download or install updates by itself. A new version means installing a new copy.</div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="forcepull">Refresh from team</button></div></div>';
 }
 function viewSettings(){
   const s=S.settings;
-  const num=(k,label,min,max,step)=>'<div class="row" style="justify-content:space-between"><div class="field"><label>'+label+'</label></div><div class="num"><button class="btn" data-a="num" data-k="'+k+'" data-d="-'+(step||1)+'">−</button><input id="set_'+k+'" type="number" inputmode="numeric" value="'+s[k]+'" min="'+min+'" max="'+max+'" data-k="'+k+'"><button class="btn" data-a="num" data-k="'+k+'" data-d="'+(step||1)+'">+</button></div></div>';
-  const tog=(k,label,desc)=>'<button class="toggle '+(s[k]?'on':'')+'" data-a="tog" data-k="'+k+'"><span>'+label+(desc?'<br><small style="color:var(--mut);font-weight:700">'+desc+'</small>':'')+'</span><span class="sw"></span></button>';
+  const num=(k,label,min,max,step)=>'<div class="row" style="justify-content:space-between"><div class="field"><label>'+label+'</label></div><div class="num"><button class="btn" data-a="num" data-k="'+esc(k)+'" data-d="-'+(step||1)+'">−</button><input id="'+esc('set_'+k)+'" type="number" inputmode="numeric" value="'+s[k]+'" min="'+min+'" max="'+max+'" data-k="'+esc(k)+'"><button class="btn" data-a="num" data-k="'+esc(k)+'" data-d="'+(step||1)+'">+</button></div></div>';
+  const tog=(k,label,desc)=>'<button class="toggle '+(s[k]?'on':'')+'" data-a="tog" data-k="'+esc(k)+'"><span>'+label+(desc?'<br><small style="color:var(--mut);font-weight:700">'+desc+'</small>':'')+'</span><span class="sw"></span></button>';
   if(isViewer()) return viewSettingsViewer(tog);
   const fsel='<div class="row" style="justify-content:space-between"><div class="field"><label>Formation</label></div><select id="set_formation" '+(G&&G.phase!=='setup'&&G.phase!=='done'?'disabled':'')+'>'+Object.entries(FORMATIONS).map(([k,f])=>'<option value="'+k+'" '+(S.settings.formation===k?'selected':'')+'>'+f.name+'</option>').join('')+'</select></div>'+(G&&G.phase!=='setup'&&G.phase!=='done'?'<div style="font-size:13px;color:var(--mut);font-weight:700">Formation locks while a game is running.</div>':'');
   return '<div class="lbl">Game</div>'+fsel+num('gameLen','Game length (min)',10,120,5)+num('halfLen','Half length (min)',5,60,5)+num('subInterval','Sub check every (min)',1,20)+num('minTarget','Minimum minutes per player',0,120)+num('maxSubs','Subs suggested per window (1 to 3)',1,3)
-    +'<div class="lbl">Lineup balance</div>'+tog('balance','Balance lineups','Avoid stacking developing players at once')+num('weakMax','Max development load on field',0,14)+'<div style="font-size:14px;color:var(--mut);font-weight:700">Core = 0, Developing = 1, Needs support = 2 per player. Default 4 (so all four developing players never start together).</div>'
+    +'<div class="lbl">Lineup balance</div>'+tog('balance','Balance lineups','Avoid stacking developing players at once')+num('weakMax','Max development load on field',0,14)+'<div style="font-size:14px;color:var(--mut);font-weight:700">Core = 0, Developing = 1, Needs support = 2 per player. Those labels stay on this phone. Default 4 (so all four developing players never start together).</div>'
     +'<div class="lbl">Goalkeeper</div>'+tog('gkSafe','Suggest a backup keeper when the lead is safe','Picks the approved keeper with the fewest GK minutes this season; starter moves to a field spot')+num('gkSafeLead','Safe lead (goals ahead)',1,10)+num('gkSafeAfter','Not before game minute',0,60)+num('gkBackLead','Put the starter back if lead drops to',0,10)+tog('gkAuto','Auto-rotate goalkeeper by time','Off = GK changes are manual only')+num('gkInterval','GK rotation interval (min)',1,60)
     +'<div class="lbl">Testing</div>'+tog('testMode','Test mode','Shows +1/+5/+10 time advance on the game screen')+tog('testTimers','Test advance moves player timers too','Off = clock only')
-    +'<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: '+(isViewer()?'Viewer':'Coach')+' · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div>'+(isViewer()?'':(teamPin()?'':'<div class="warn w" style="margin-top:8px;font-size:14px">No coach PIN set: anyone with the code can join as coach. Set one under Edit team.</div>')+'<div class="row" style="margin-top:8px"><button class="btn sm '+(teamPin()?'ghost':'act')+' grow" data-a="editteam">Edit team / coach PIN</button></div>')+'<div class="card" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--mut)"><div class="lbl">Sync details</div>'+syncDiag()+'<div class="row" style="margin-top:8px"><button class="btn sm ghost" data-a="forcepull">Pull from team now</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="forcepush">Push my copy now</button>')+'</div></div>'+'</div>'
-    +'<div class="lbl">App updates</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(window.BB_FROM_BUNDLE?' (from team update)':IS_APK?' (built in)':' (web)')+'</div>'+tog('autoUpdate','Install team updates automatically','Only between games; during a game you get a tap-to-update banner')+'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="pushupdate">Publish version (admin)</button><button class="btn sm ghost" data-a="checkupdate">Check now</button></div>'+(window.BB_FROM_BUNDLE?'<div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="builtin">Go back to built-in version</button></div>':'')+'</div>'
-    +'<div class="lbl">Data</div><div class="row"><button class="btn ghost grow" data-a="history">Game history ('+S.history.length+')</button><button class="btn ghost" data-a="guide">How it works</button></div><div class="row"><button class="btn ghost grow" data-a="gotoqueues">Position rotation queues</button></div><div class="row"><button class="btn ghost grow" data-a="resetstats">Reset season stats (games / starts)</button></div><div class="row"><button class="btn ghost grow" data-a="resetroster">Reset roster to default</button><button class="btn ghost bad" style="background:none;color:var(--bad)" data-a="wipe">Erase all</button></div>'
-    +'<div style="font-size:13px;color:var(--mut);font-weight:700">Everything is stored on this phone only. Timers use timestamps, so they stay accurate while the screen is off.</div>';
+    +'<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: '+(isViewer()?'Viewer':'Coach')+' · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div>'+(isViewer()?'':(pinIsSecure()?'':'<div class="warn w" style="margin-top:8px;font-size:14px">Set a new coach PIN under Edit team before the database is locked. The old PIN is not safe to keep.</div>')+'<div class="row" style="margin-top:8px"><button class="btn sm '+(pinIsSecure()?'ghost':'act')+' grow" data-a="editteam">Edit team / coach PIN</button></div>')+'<div class="card" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--mut)"><div class="lbl">Sync details</div>'+syncDiag()+'<div style="margin-top:6px">'+esc(authLineText())+'</div><div class="row" style="margin-top:8px"><button class="btn sm ghost" data-a="forcepull">Pull from team now</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="forcepush">Push my copy now</button>')+'</div></div>'+'</div>'
+    +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(IS_APK?' (Android)':' (web)')+'</div><div style="font-size:14px;font-weight:700;color:var(--mut);margin-top:6px">This app does not download or install updates by itself. A new version means installing a new copy.</div></div>'
+    +'<div class="lbl">Data</div><div class="row"><button class="btn ghost grow" data-a="history">Game history ('+S.history.length+')</button><button class="btn ghost" data-a="guide">How it works</button></div><div class="row"><button class="btn ghost grow" data-a="gotoqueues">Position rotation queues</button></div><div class="row"><button class="btn ghost grow" data-a="resetstats">Reset season stats (games / starts)</button></div><div class="row"><button class="btn ghost grow" data-a="resetroster">Reset roster to placeholders</button><button class="btn ghost bad" style="background:none;color:var(--bad)" data-a="wipe">Erase all</button></div>'
+    +'<div style="font-size:13px;color:var(--mut);font-weight:700">Names, numbers, the lineup, score, and chat sync to the shared team. Development labels stay on this coach phone. The clock uses timestamps, so it stays accurate while the screen is off.</div>';
 }
 
 /* ====================== SHEETS ====================== */
@@ -822,21 +870,21 @@ function openSheet(html){ $('#sheet').innerHTML=html; $('#sheetbg').hidden=false
 function closeSheet(){ $('#sheetbg').hidden=true; }
 function sheetPickFor(pos){ // setup: choose player for a position
   const occ=G.field[pos]; const list=G.phase==='setup'?availRoster():benchIds().map(player); const act2=G.phase==='setup'?'assign':'subin';
-  const sec=(title,arr)=>arr.length?'<div class="sec">'+title+'</div>'+arr.map(p=>'<button class="opt '+(p.auto.includes(ROLE[pos])?'':'dim')+'" data-a="'+act2+'" data-id="'+p.id+'" data-pos="'+pos+'"><div><div class="nm">'+nm(p)+'</div><div class="sub2">'+p.auto.join(' / ')+(posOf(p.id)?' · now at '+posOf(p.id):'')+'</div></div><span class="arrow">›</span></button>').join(''):'';
-  openSheet('<h2>'+PNAME[pos]+' ('+pos+')</h2>'+sec('Approved',list.filter(p=>p.auto.includes(ROLE[pos])))+sec('Manual only',list.filter(p=>!p.auto.includes(ROLE[pos])&&p.manual.includes(ROLE[pos])))+sec('Not approved',list.filter(p=>!p.auto.includes(ROLE[pos])&&!p.manual.includes(ROLE[pos])))+(occ?'<button class="btn ghost wide" data-a="unassign" data-pos="'+pos+'">Clear '+esc(player(occ).name)+' from '+pos+'</button>':'')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
+  const sec=(title,arr)=>arr.length?'<div class="sec">'+title+'</div>'+arr.map(p=>'<button class="opt '+(p.auto.includes(ROLE[pos])?'':'dim')+'" data-a="'+esc(act2)+'" data-id="'+esc(p.id)+'" data-pos="'+esc(pos)+'"><div><div class="nm">'+nm(p)+'</div><div class="sub2">'+p.auto.join(' / ')+(posOf(p.id)?' · now at '+posOf(p.id):'')+'</div></div><span class="arrow">›</span></button>').join(''):'';
+  openSheet('<h2>'+PNAME[pos]+' ('+pos+')</h2>'+sec('Approved',list.filter(p=>p.auto.includes(ROLE[pos])))+sec('Manual only',list.filter(p=>!p.auto.includes(ROLE[pos])&&p.manual.includes(ROLE[pos])))+sec('Not approved',list.filter(p=>!p.auto.includes(ROLE[pos])&&!p.manual.includes(ROLE[pos])))+(occ?'<button class="btn ghost wide" data-a="unassign" data-pos="'+esc(pos)+'">Clear '+esc(player(occ).name)+' from '+pos+'</button>':'')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
 }
 function sheetBench(id){ // bench player → where does he go
   const p=player(id); const c=clock(); const setup=G.phase==='setup';
-  const row=(pos,dim)=>{const occ=G.field[pos]; const o=occ?player(occ):null; return '<button class="opt '+(dim?'dim':'')+'" data-a="'+(setup?'assign':'subin')+'" data-id="'+id+'" data-pos="'+pos+'"><div><div class="nm">'+pos+' · '+PNAME[pos]+'</div><div class="sub2">'+(o?'replaces '+esc(o.name)+(setup?'':' (on '+fmt(fieldStint(occ,c))+', total '+fmt(played(occ,c))+')'):'empty')+'</div></div><span class="arrow">›</span></button>';};
+  const row=(pos,dim)=>{const occ=G.field[pos]; const o=occ?player(occ):null; return '<button class="opt '+(dim?'dim':'')+'" data-a="'+esc(setup?'assign':'subin')+'" data-id="'+esc(id)+'" data-pos="'+esc(pos)+'"><div><div class="nm">'+pos+' · '+PNAME[pos]+'</div><div class="sub2">'+(o?'replaces '+esc(o.name)+(setup?'':' (on '+fmt(fieldStint(occ,c))+', total '+fmt(played(occ,c))+')'):'empty')+'</div></div><span class="arrow">›</span></button>';};
   const approved=POSID.filter(x=>p.auto.includes(ROLE[x])), manual=POSID.filter(x=>!p.auto.includes(ROLE[x])&&p.manual.includes(ROLE[x])), other=POSID.filter(x=>!p.auto.includes(ROLE[x])&&!p.manual.includes(ROLE[x]));
   openSheet('<h2>'+nm(p)+' goes in at…</h2><div class="sec">Approved</div>'+approved.map(x=>row(x,false)).join('')+(manual.length?'<div class="sec">Manual only</div>'+manual.map(x=>row(x,true)).join(''):'')+'<div class="sec">Other (not approved)</div>'+other.map(x=>row(x,true)).join('')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
 }
 function sheetField(id){ // field player → who replaces him / swap
   const p=player(id); const pos=posOf(id); const c=clock(); const bench=benchIds().map(player);
-  const row=b=>'<button class="opt '+(b.auto.includes(ROLE[pos])?'':'dim')+'" data-a="subin" data-id="'+b.id+'" data-pos="'+pos+'"><div><div class="nm">'+nm(b)+'</div><div class="sub2">'+b.auto.join(' / ')+' · played '+fmt(played(b.id,c))+' · sitting '+fmt(benchStint(b.id,c))+'</div></div><span class="arrow">›</span></button>';
+  const row=b=>'<button class="opt '+(b.auto.includes(ROLE[pos])?'':'dim')+'" data-a="subin" data-id="'+esc(b.id)+'" data-pos="'+esc(pos)+'"><div><div class="nm">'+nm(b)+'</div><div class="sub2">'+b.auto.join(' / ')+' · played '+fmt(played(b.id,c))+' · sitting '+fmt(benchStint(b.id,c))+'</div></div><span class="arrow">›</span></button>';
   const a=bench.filter(b=>b.auto.includes(ROLE[pos])), m=bench.filter(b=>!b.auto.includes(ROLE[pos])&&b.manual.includes(ROLE[pos])), o=bench.filter(b=>!b.auto.includes(ROLE[pos])&&!b.manual.includes(ROLE[pos]));
   const others=fieldIds().filter(x=>x!==id).map(player);
-  openSheet('<h2>'+nm(p)+' out of '+pos+'</h2><div class="sub2" style="font-weight:700;color:var(--mut)">On field '+fmt(fieldStint(id,c))+' · total '+fmt(played(id,c))+'</div><div class="sec">Approved for '+pos+'</div>'+(a.length?a.map(row).join(''):'<div class="sub2">nobody on the bench</div>')+(m.length?'<div class="sec">Manual only</div>'+m.map(row).join(''):'')+(o.length?'<div class="sec">Not approved</div>'+o.map(row).join(''):'')+'<div class="sec">Or swap positions with</div>'+others.map(x=>'<button class="opt" data-a="swap" data-id="'+id+'" data-b="'+x.id+'"><div class="nm">'+nm(x)+' <small>'+posOf(x.id)+'</small></div><span class="arrow">⇄</span></button>').join('')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
+  openSheet('<h2>'+nm(p)+' out of '+pos+'</h2><div class="sub2" style="font-weight:700;color:var(--mut)">On field '+fmt(fieldStint(id,c))+' · total '+fmt(played(id,c))+'</div><div class="sec">Approved for '+pos+'</div>'+(a.length?a.map(row).join(''):'<div class="sub2">nobody on the bench</div>')+(m.length?'<div class="sec">Manual only</div>'+m.map(row).join(''):'')+(o.length?'<div class="sec">Not approved</div>'+o.map(row).join(''):'')+'<div class="sec">Or swap positions with</div>'+others.map(x=>'<button class="opt" data-a="swap" data-id="'+esc(id)+'" data-b="'+esc(x.id)+'"><div class="nm">'+nm(x)+' <small>'+posOf(x.id)+'</small></div><span class="arrow">⇄</span></button>').join('')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
 }
 function sheetEditTime(){
   const c=Math.round(clock());
@@ -846,26 +894,26 @@ function sheetEditTime(){
 }
 function sheetPlayer(id){
   const p=id?player(id):{id:'',name:'',num:'',primary:'ST',auto:[],manual:[],group:'dev',avail:true};
-  const chips=(k)=>'<div class="chips" data-k="'+k+'">'+ROLES.map(x=>'<button class="chip '+(p[k].includes(x)?(k==='auto'?'on':'on2'):'')+'" data-a="pchip" data-k="'+k+'" data-pos="'+x+'">'+x+'</button>').join('')+'</div>';
+  const chips=(k)=>'<div class="chips" data-k="'+esc(k)+'">'+ROLES.map(x=>'<button class="chip '+(p[k].includes(x)?(k==='auto'?'on':'on2'):'')+'" data-a="pchip" data-k="'+esc(k)+'" data-pos="'+esc(x)+'">'+x+'</button>').join('')+'</div>';
   openSheet('<h2>'+(id?'Edit player':'New player')+'</h2><input type="hidden" id="pl_id" value="'+esc(p.id)+'"><div class="field"><label for="pl_name">Name</label><input id="pl_name" value="'+esc(p.name)+'"></div><div class="field"><label for="pl_num">Jersey number</label><input id="pl_num" inputmode="numeric" value="'+esc(p.num)+'"></div>'
     +'<div class="field"><label for="pl_primary">Primary position</label><select id="pl_primary">'+ROLES.map(x=>'<option value="'+x+'" '+(p.primary===x?'selected':'')+'>'+x+' · '+RNAME[x]+'</option>').join('')+'</select></div>'
     +'<div class="field"><label>Auto-rotation positions (the app will recommend these)</label>'+chips('auto')+'</div><div class="field"><label>Manual / emergency only (never auto-recommended)</label>'+chips('manual')+'</div>'
     +(id?'<div class="row"><div class="field grow"><label for="pl_games">Games played</label><input id="pl_games" inputmode="numeric" value="'+(p.games||0)+'"></div><div class="field grow"><label for="pl_starts">Games started</label><input id="pl_starts" inputmode="numeric" value="'+(p.starts||0)+'"></div></div>':'')
-    +'<div class="field"><label for="pl_group">Development group (algorithm only, never shown on game screen)</label><select id="pl_group">'+Object.entries(GROUPS).map(([k,v])=>'<option value="'+k+'" '+(p.group===k?'selected':'')+'>'+v+'</option>').join('')+'</select></div>'
-    +'<button class="btn act big wide" data-a="saveplayer">Save</button>'+(id?'<button class="btn ghost wide" style="color:var(--bad)" data-a="delplayer" data-id="'+id+'">Delete player</button>':'')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
+    +'<div class="field"><label for="pl_group">Development group (stays on this phone, not shared)</label><select id="pl_group">'+Object.entries(GROUPS).map(([k,v])=>'<option value="'+esc(k)+'" '+(p.group===k?'selected':'')+'>'+esc(v)+'</option>').join('')+'</select></div>'
+    +'<button class="btn act big wide" data-a="saveplayer">Save</button>'+(id?'<button class="btn ghost wide" style="color:var(--bad)" data-a="delplayer" data-id="'+esc(id)+'">Delete player</button>':'')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
 }
 function sheetHistoryViewer(){
   openSheet('<h2>Season</h2>'+(S.history.length?S.history.map(g=>{ const sc=g.score||{us:0,them:0}; const cnt={}; for(const x of (g.goals||[])){ if(x.us&&x.scorerId){ const pl=player(x.scorerId); if(pl) cnt[pl.name]=(cnt[pl.name]||0)+1; } }
     return '<div class="hist"><div class="row"><b class="grow">'+new Date(g.date).toLocaleDateString()+(g.opponent?' vs '+esc(g.opponent):'')+'</b><span class="big">'+sc.us+' – '+sc.them+'</span></div>'+(Object.keys(cnt).length?'<div style="font-size:14px;font-weight:700;color:var(--mut)">Goals: '+Object.entries(cnt).map(([n,c])=>esc(n)+(c>1?' ×'+c:'')).join(', ')+'</div>':'')+'<table style="margin-top:6px"><tr><th>Player</th><th class="r">Minutes</th><th>Positions</th></tr>'+(g.players||[]).slice().sort((a,b)=>b.played-a.played).map(p=>'<tr><td>'+esc(p.name)+(p.start?' <span class="tag g">start</span>':'')+'</td><td class="r"><b>'+fmt(p.played)+'</b></td><td>'+(p.positions||[]).join(' ')+'</td></tr>').join('')+'</table></div>'; }).join(''):'<div class="card">No games yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
 }
 function sheetHistory(){ if(isViewer()) return sheetHistoryViewer();
-  openSheet('<h2>Game history</h2>'+(S.history.length?S.history.map((g,i)=>'<div class="hist"><b>'+new Date(g.date).toLocaleDateString()+(g.opponent?' vs '+esc(g.opponent):'')+'</b> · '+fmt(g.len)+' · '+g.subs.filter(s=>!s.swap).length+' subs<div style="font-size:14px">'+g.players.slice().sort((a,b)=>a.played-b.played).map(p=>esc(p.name)+' '+fmt(p.played)+(p.played<g.target*60?' ⚠':'')).join(' · ')+'</div><button class="btn sm ghost" data-a="delhist" data-i="'+i+'">Delete</button></div>').join(''):'<div class="card">No completed games yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
+  openSheet('<h2>Game history</h2>'+(S.history.length?S.history.map((g,i)=>'<div class="hist"><b>'+new Date(g.date).toLocaleDateString()+(g.opponent?' vs '+esc(g.opponent):'')+'</b> · '+fmt(g.len)+' · '+g.subs.filter(s=>!s.swap).length+' subs<div style="font-size:14px">'+g.players.slice().sort((a,b)=>a.played-b.played).map(p=>esc(p.name)+' '+fmt(p.played)+(p.played<g.target*60?' ⚠':'')).join(' · ')+'</div><button class="btn sm ghost" data-a="delhist" data-i="'+esc(i)+'">Delete</button></div>').join(''):'<div class="card">No completed games yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
 }
-function sheetConfirm(text,action,label){ openSheet('<h2>'+text+'</h2><button class="btn bad big wide" data-a="'+action+'" data-confirmed="1">'+label+'</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
+function sheetConfirm(text,action,label){ openSheet('<h2>'+esc(text)+'</h2><button class="btn bad big wide" data-a="'+esc(action)+'" data-confirmed="1">'+esc(label)+'</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
 
 /* ====================== EVENTS ====================== */
-const VIEWER_OK=new Set(['chatdel','forcepull','team','teamjoin','teamcreate','teamback','teamjoingo','teamcreatego','teamleave','close','goalsheet','showlog','history','chatquick','chatname','chatnamesave','synctest','applyupdate','checkupdate','builtin','gotoqueues','guide','setrole','role','resume','tog']);
-function act(a,d,el){
+const VIEWER_OK=new Set(['chatdel','forcepull','team','teamjoin','teamcreate','teamback','teamjoingo','teamcreatego','teamleave','close','goalsheet','showlog','history','chatquick','chatname','chatnamesave','synctest','gotoqueues','guide','setrole','role','resume','tog']);
+async function act(a,d,el){
   if(isViewer()&&!VIEWER_OK.has(a)) return;
   if(isViewer()&&a==='tog'&&d.k!=='autoUpdate') return;
   switch(a){
@@ -903,18 +951,18 @@ function act(a,d,el){
       const id=$('#pl_id').value||uid(); const auto=[...document.querySelectorAll('.chips[data-k=auto] .chip.on')].map(x=>x.dataset.pos); const manual=[...document.querySelectorAll('.chips[data-k=manual] .chip.on2')].map(x=>x.dataset.pos).filter(x=>!auto.includes(x));
       const name=$('#pl_name').value.trim()||'Player'; const num=$('#pl_num').value.trim(); const primary=$('#pl_primary').value; const group=$('#pl_group').value;
       let p=player(id); if(!p){ p={id,avail:true,starts:0,benchStarts:0,games:0}; S.roster.push(p); }
-      Object.assign(p,{name,num,primary,auto:auto.length?auto:[primary],manual,group}); if($('#pl_games')){ p.games=Math.max(0,+$('#pl_games').value||0); p.starts=Math.min(p.games,Math.max(0,+$('#pl_starts').value||0)); p.benchStarts=p.games-p.starts; } syncQueues(); closeSheet(); break; }
+      Object.assign(p,{name,num,primary,auto:auto.length?auto:[primary],manual,group}); captureGroups([p]); if($('#pl_games')){ p.games=Math.max(0,+$('#pl_games').value||0); p.starts=Math.min(p.games,Math.max(0,+$('#pl_starts').value||0)); p.benchStarts=p.games-p.starts; } syncQueues(); closeSheet(); break; }
     case 'delplayer': { S.roster=S.roster.filter(p=>p.id!==d.id); if(G){ for(const pos of POSID) if(G.field[pos]===d.id) G.field[pos]=null; } syncQueues(); closeSheet(); break; }
     case 'toggleavail': { const p=player(d.id); p.avail=!p.avail; if(!p.avail&&G){ for(const pos of POSID) if(G.field[pos]===d.id) G.field[pos]=null; } break; }
     case 'tog': S.settings[d.k]=!S.settings[d.k]; break;
     case 'num': { const inp=$('#set_'+d.k); const v=Math.min(+inp.max,Math.max(+inp.min,(+inp.value||0)+(+d.d))); S.settings[d.k]=v; break; }
     case 'history': sheetHistory(); return;
     case 'showlog': openSheet('<h2>Subs this game</h2>'+(G.subs.length?'<div class="hist">'+G.subs.slice().reverse().map(logLine).join('')+'</div>':'<div class="card">No subs yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>'); return;
-    case 'delhist': { if(isViewer()) return; const g=S.history.splice(+d.i,1)[0]; save(true); sheetHistory(); if(g&&g.id&&S.syncUrl&&CODE()&&isFirebase()) fetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games/'+encodeURIComponent(g.id)+'.json',{method:'DELETE'}).catch(()=>{}); return; }
-    case 'resetroster': sheetConfirm('Reset roster to the default team? Starts history is lost.','doresetroster','Reset roster'); return;
-    case 'doresetroster': S.roster=defaultRoster(); S.queues=defaultQueues(); closeSheet(); break;
+    case 'delhist': { if(isViewer()) return; const g=S.history.splice(+d.i,1)[0]; save(true); sheetHistory(); if(g&&g.id&&S.syncUrl&&CODE()&&isFirebase()) fbFetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games/'+encodeURIComponent(g.id)+'.json',{method:'DELETE'}).catch(()=>{}); return; }
+    case 'resetroster': sheetConfirm('Reset roster to placeholder players? Season starts on this phone are lost.','doresetroster','Reset roster'); return;
+    case 'doresetroster': S.roster=defaultRoster(); S.queues=defaultQueues(); writeGroupMap({}); captureGroups(S.roster); closeSheet(); break;
     case 'wipe': sheetConfirm('Erase roster, settings, current game and history?','dowipe','Erase everything'); return;
-    case 'dowipe': try{localStorage.removeItem(LS);}catch(e){} S={settings:{...DEFAULT_SETTINGS},roster:defaultRoster(),queues:defaultQueues(),game:null,history:[],tab:'game',updatedAt:0,syncUrl:SYNC_BASE,chat:[],chatName:'',role:'',team:null}; closeSheet(); save(true); render(); sheetTeam(true); return;
+    case 'dowipe': { const gk=groupStoreKey(); try{localStorage.removeItem(LS); localStorage.removeItem(gk); localStorage.removeItem(AUTH_LS);}catch(e){} AUTH.uid=''; AUTH.token=''; AUTH.refresh=''; AUTH.exp=0; S={settings:{...DEFAULT_SETTINGS},roster:defaultRoster(),queues:defaultQueues(),game:null,history:[],tab:'game',updatedAt:0,syncUrl:SYNC_BASE,chat:[],chatName:'',role:'',team:null,devId:S.devId||''}; closeSheet(); save(true); render(); sheetTeam(true); return; }
     case 'synctest': S.syncUrl=($('#set_syncUrl').value||'').trim(); SYNC.status='pending'; save(true); joinSync(); pullChat(); render(); return;
     case 'goalus_pick': sheetGoal(); return;
     case 'goalus': closeSheet(); addGoal(true,d.id||null); return;
@@ -925,16 +973,26 @@ function act(a,d,el){
     case 'chatname': sheetChatName(''); return;
     case 'chatnamesave': { S.chatName=($('#cn').value||'').trim(); closeSheet(); save(true); if(d.pending) sendChat(d.pending); else render(); return; }
     case 'gotoqueues': S.tab='queues'; break;
-    case 'applyupdate': applyUpdate(); return;
-    case 'pushupdate': openSheet('<h2>Send this version to every team</h2><div class="field"><label for="adm">Admin code</label><input id="adm" autocomplete="off"></div><button class="btn act big wide" data-a="pushupdatego">Send</button><button class="btn ghost wide" data-a="close">Cancel</button>'); return;
-    case 'pushupdatego': if(($('#adm').value||'').trim()!==ADMIN_CODE){ $('#adm').value=''; $('#adm').placeholder='Wrong code'; return; } closeSheet(); pushUpdate(); return;
-    case 'checkupdate': UPD.avail=0; checkUpdate().then(()=>{ if(!UPD.avail) openSheet('<h2>You have the latest version</h2><button class="btn ghost wide" data-a="close">Close</button>'); }); return;
-    case 'builtin': useBuiltIn(); return;
-    case 'setrole': if(d.r==='coach'&&teamPin()&&pinHash(($('#rp_pin')&&$('#rp_pin').value||'').trim())!==teamPin()){ const e=$('#rp_err'); if(e) e.textContent='Wrong coach PIN.'; return; } S.role=d.r; closeSheet(); save(true); if(!S.seenGuide&&S.role==='coach'){ S.seenGuide=true; guide(); } render(); return;
+    case 'setrole': {
+      if(d.r==='viewer'){ S.role='viewer'; closeSheet(); save(true); render(); return; }
+      const pin=($('#rp_pin')&&$('#rp_pin').value||'').trim();
+      const res=await becomeCoach(pin, !(S.team&&S.team.pinV===2));
+      if(!res.ok){ const e=$('#rp_err'); if(e) e.textContent=res.reason||'Wrong coach PIN.'; return; }
+      S.role='coach'; closeSheet(); save(true); if(!S.seenGuide){ S.seenGuide=true; guide(); } render(); return;
+    }
     case 'role': sheetRole(false); return;
     case 'team': sheetTeam(false); return;
-    case 'editteam': openSheet('<h2>Team</h2><div class="field"><label for="et_name">Team name</label><input id="et_name" value="'+esc(TEAMNAME())+'"></div><div class="field"><label for="et_coach">Coach</label><input id="et_coach" value="'+esc(COACHNAME())+'"></div><div class="field"><label for="et_pin">New coach PIN (leave blank to keep)</label><input id="et_pin" inputmode="numeric" autocomplete="off" placeholder="4 to 6 digits"></div><button class="btn act big wide" data-a="editteamsave">Save</button><button class="btn ghost wide" data-a="close">Cancel</button>'); return;
-    case 'editteamsave': { const np=($('#et_pin').value||'').trim(); S.team={...S.team,name:$('#et_name').value.trim()||S.team.name,coach:$('#et_coach').value.trim(),...(np?{pin:pinHash(np)}:{})}; closeSheet(); break; }
+    case 'editteam': openSheet('<h2>Team</h2><div class="field"><label for="et_name">Team name</label><input id="et_name" value="'+esc(TEAMNAME())+'"></div><div class="field"><label for="et_coach">Coach</label><input id="et_coach" value="'+esc(COACHNAME())+'"></div><div class="field"><label for="et_pin">New coach PIN (4 to 6 digits, leave blank to keep)</label><input id="et_pin" inputmode="numeric" autocomplete="off" placeholder="4 to 6 digits"></div><div id="et_err" class="sub2" style="color:var(--bad);font-weight:800"></div><button class="btn act big wide" data-a="editteamsave">Save</button><button class="btn ghost wide" data-a="close">Cancel</button>'); return;
+    case 'editteamsave': {
+      const np=($('#et_pin').value||'').trim();
+      S.team={...S.team,name:$('#et_name').value.trim()||S.team.name,coach:$('#et_coach').value.trim()};
+      delete S.team.pin;
+      if(np){
+        const res=await becomeCoach(np, true);
+        if(!res.ok){ const e=$('#et_err'); if(e) e.textContent=res.reason||'Could not save the coach PIN.'; return; }
+      }
+      closeSheet(); break;
+    }
     case 'teamjoin': sheetTeamJoin(); return;
     case 'teamcreate': sheetTeamCreate(); return;
     case 'teamback': sheetTeam(!S.team); return;
@@ -999,11 +1057,93 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) render()
 /* first-run guide */
 function guide(){ openSheet('<h2>'+esc(TEAMNAME())+'</h2><div class="sub2" style="font-weight:800">How it works:</div><div class="opt"><div><div class="nm">1. Before the game</div><div class="sub2">Tap who is here, tap Suggest lineup, tap Kickoff.</div></div></div><div class="opt"><div><div class="nm">2. At kickoff</div><div class="sub2">Tap Start clock. Forgot? Tap the time and type what the ref has.</div></div></div><div class="opt"><div><div class="nm">3. During the game</div><div class="sub2">The orange box tells you one sub to make. Tap Make this sub when you do it. That is the whole job.</div></div></div><div class="opt"><div><div class="nm">4. Overrides</div><div class="sub2">Tap any field player to take him out, any bench player to put him in, Undo if you tapped wrong.</div></div></div><button class="btn act big wide" data-a="close">Got it</button>'); }
 function codeOk(c){ return /^[A-Z0-9]{4,12}$/.test(c); }
-function pinHash(pin){ let h=5381; const str='sidelinesub:'+String(pin||''); for(let i=0;i<str.length;i++) h=((h*33)^str.charCodeAt(i))>>>0; return h.toString(36); }
 function pinOk(p){ return /^\d{4,6}$/.test(p||''); }
-function teamPin(){ return S.team&&S.team.pin||''; }
+function pinIsSecure(){ return !!(S.team&&S.team.pinV===2); }
+function sha256Hex(str){
+  function rotr(n,x){ return ((x>>>n)|(x<<(32-n)))>>>0; }
+  const K=new Uint32Array([
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+  const bytes=new Uint8Array(String(str).length);
+  for(let i=0;i<bytes.length;i++) bytes[i]=str.charCodeAt(i)&255;
+  const bitLen=bytes.length*8;
+  let n=bytes.length+1+8; if(n%64) n+=64-(n%64);
+  const buf=new Uint8Array(n); buf.set(bytes); buf[bytes.length]=0x80;
+  const view=new DataView(buf.buffer); view.setUint32(n-4, bitLen>>>0);
+  let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+  const w=new Uint32Array(64);
+  for(let i=0;i<n;i+=64){
+    for(let t=0;t<16;t++) w[t]=view.getUint32(i+t*4);
+    for(let t=16;t<64;t++){
+      const s0=rotr(7,w[t-15])^rotr(18,w[t-15])^(w[t-15]>>>3);
+      const s1=rotr(17,w[t-2])^rotr(19,w[t-2])^(w[t-2]>>>10);
+      w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;
+    }
+    let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+    for(let t=0;t<64;t++){
+      const S1=rotr(6,e)^rotr(11,e)^rotr(25,e);
+      const ch=(e&f)^(~e&g);
+      const t1=(h+S1+ch+K[t]+w[t])>>>0;
+      const S0=rotr(2,a)^rotr(13,a)^rotr(22,a);
+      const maj=(a&b)^(a&c)^(b&c);
+      const t2=(S0+maj)>>>0;
+      h=g; g=f; f=e; e=(d+t1)>>>0; d=c; c=b; b=a; a=(t1+t2)>>>0;
+    }
+    h0=(h0+a)>>>0; h1=(h1+b)>>>0; h2=(h2+c)>>>0; h3=(h3+d)>>>0; h4=(h4+e)>>>0; h5=(h5+f)>>>0; h6=(h6+g)>>>0; h7=(h7+h)>>>0;
+  }
+  return [h0,h1,h2,h3,h4,h5,h6,h7].map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+function pinDigest(pin){ return sha256Hex('sidelinesub:v2:'+String(pin||'')); }
+async function claimCoach(pin){
+  const hash=pinDigest(pin);
+  const claimUrl=secretRoot()+'/claims/'+encodeURIComponent(AUTH.uid)+'.json';
+  const r=await fbFetch(claimUrl,{method:'PUT',body:JSON.stringify({hash})});
+  if(!r.ok) return (r.status===401||r.status===403)?'denied':'error';
+  const c=await fbFetch(teamRoot()+'/coaches/'+encodeURIComponent(AUTH.uid)+'.json',{method:'PUT',body:'true'});
+  try{ await fbFetch(claimUrl,{method:'DELETE'}); }catch(e){}
+  if(!c.ok) return (c.status===401||c.status===403)?'denied':'error';
+  return 'ok';
+}
+async function writeCoachSecret(pin){
+  if(!(await ensureAuth())) return {ok:false, reason:FIREBASE_API_KEY?'Sign-in failed. Enable Anonymous auth and check the web API key.':'Add the Firebase web API key first (see MIGRATION.md).'};
+  const hash=pinDigest(pin);
+  const root=secretRoot();
+  const o=await fbFetch(root+'/ownerUid.json',{method:'PUT',body:JSON.stringify(AUTH.uid)});
+  const p=await fbFetch(root+'/pinHash.json',{method:'PUT',body:JSON.stringify(hash)});
+  if(!p.ok) return {ok:false, reason:(o.ok?'':'Coach record was rejected. ')+'The coach PIN could not be stored ('+p.status+').'};
+  const c=await fbFetch(teamRoot()+'/coaches/'+encodeURIComponent(AUTH.uid)+'.json',{method:'PUT',body:'true'});
+  if(!c.ok) return {ok:false, reason:'Signed in, but this phone is not a coach yet ('+c.status+').'};
+  return {ok:true};
+}
+async function becomeCoach(pin, establish){
+  try{
+  if(!pinOk(pin)) return {ok:false, reason:'PIN must be 4 to 6 digits.'};
+  const authed=await ensureAuth();
+  if(!authed){
+    if(!FIREBASE_API_KEY) return {ok:true, legacy:true};
+    return {ok:false, reason:'Sign-in failed. Enable Anonymous auth and check the web API key.'};
+  }
+  if(establish || !(S.team&&S.team.pinV===2)){
+    const w=await writeCoachSecret(pin);
+    if(!w.ok) return w;
+    if(S.team){ S.team.pinV=2; delete S.team.pin; }
+    return {ok:true};
+  }
+  const c=await claimCoach(pin);
+  if(c==='ok') return {ok:true};
+  return {ok:false, reason:'Wrong coach PIN.'};
+  }catch(e){ return {ok:false, reason:'Could not reach the team server.'}; }
+}
+const PRIVACY_NOTE='Player first names, numbers, and the live game are shared with anyone who has the team code. Development notes stay on the coach phone. Do not add last names, birthdays, school, or contact details.';
 function sheetTeam(first){
   openSheet('<h2>'+(first?'Welcome to Sideline Sub':'Team')+'</h2><div class="sub2" style="font-weight:700;color:var(--mut)">Every team has a short code. Coaches create one; parents and assistants join with it.</div>'
+    +'<div class="sub2" style="font-weight:700;color:var(--mut)">'+PRIVACY_NOTE+'</div>'
     +'<button class="opt" data-a="teamjoin"><div><div class="nm">Join a team</div><div class="sub2">I have a team code</div></div><span class="arrow">›</span></button>'
     +'<button class="opt" data-a="teamcreate"><div><div class="nm">Create a team</div><div class="sub2">I am the coach, start a new team</div></div><span class="arrow">›</span></button>'
     +(first?'':'<button class="btn ghost wide" data-a="close">Cancel</button>'));
@@ -1016,17 +1156,27 @@ function sheetTeamJoin(){
 }
 function sheetTeamCreate(){
   openSheet('<h2>Create a team</h2><div class="field"><label for="tc_name">Team name</label><input id="tc_name" placeholder="e.g. U10 Thunder"></div><div class="field"><label for="tc_coach">Coach</label><input id="tc_coach" placeholder="e.g. Coach Smith"></div><div class="field"><label for="tc_pin">Coach PIN (4 to 6 digits; coaches need it, viewers do not)</label><input id="tc_pin" inputmode="numeric" autocomplete="off" placeholder="e.g. 2016" style="font-size:22px;font-weight:900;letter-spacing:.2em"></div><div class="field"><label for="tc_code">Team code (4 to 12 letters or numbers, what others will type)</label><input id="tc_code" autocapitalize="characters" autocomplete="off" placeholder="THUNDER10" style="font-size:22px;font-weight:900;letter-spacing:.1em;text-transform:uppercase"></div>'
-    +'<div class="sub2" style="font-weight:700;color:var(--mut)">You get a sample roster to edit. Game format defaults to 7v7, 2 × 25 min.</div><div id="tc_err" class="sub2" style="color:var(--bad);font-weight:800"></div>'
+    +'<div class="sub2" style="font-weight:700;color:var(--mut)">You start with placeholder players (Player 1, Player 2, and so on). Rename them before the game. Format defaults to 7v7, 2 × 25 min.</div>'
+    +'<div class="sub2" style="font-weight:700;color:var(--mut)">'+PRIVACY_NOTE+'</div><div id="tc_err" class="sub2" style="color:var(--bad);font-weight:800"></div>'
     +'<button class="btn act big wide" data-a="teamcreatego">Create team</button><button class="btn ghost wide" data-a="teamback">Back</button>');
 }
 async function joinTeam(code,role){
   const err=$('#tj_err'); code=(code||'').trim().toUpperCase();
   if(!codeOk(code)){ err.textContent='Code must be 4 to 12 letters or numbers.'; return; }
   err.textContent='Looking up team…';
-  try{ const r=await fetch(S.syncUrl+'/teams/'+encodeURIComponent(code)+'/state/state/team.json?t='+Date.now(),{cache:'no-store'}); const t=await r.json();
+  try{
+    const r=await fbFetch(S.syncUrl+'/teams/'+encodeURIComponent(code)+'/state/state/team.json?t='+Date.now());
+    if(!r.ok){ err.textContent=r.status===401||r.status===403?'Sign-in required. Finish the Firebase steps, then try again.':'Could not reach the team server. Check your signal.'; return; }
+    const t=await r.json();
     if(!t||!t.code){ err.textContent='No team with that code. Check with your coach.'; return; }
-    if(role==='coach'&&t.pin&&pinHash(($('#tj_pin')&&$('#tj_pin').value||'').trim())!==t.pin){ err.textContent='Wrong coach PIN. Ask the coach, or join as a viewer.'; return; }
-    S.team=t; S.role=role; S.updatedAt=0; S.game=null; S.history=[]; S.chat=[]; closeSheet(); save(true); await joinSync(); pullChat(); pullHistory(); render();
+    const prev=S.team;
+    S.team={...t}; delete S.team.pin;
+    if(role==='coach'){
+      const pin=($('#tj_pin')&&$('#tj_pin').value||'').trim();
+      const res=await becomeCoach(pin, t.pinV!==2);
+      if(!res.ok){ S.team=prev; err.textContent=res.reason||'Wrong coach PIN. Ask the coach, or join as a viewer.'; return; }
+    }
+    S.role=role; S.updatedAt=0; S.game=null; S.history=[]; S.chat=[]; closeSheet(); save(true); await joinSync(); pullChat(); pullHistory(); render();
     if(role==='coach'&&!S.seenGuide){ S.seenGuide=true; save(true); guide(); }
   }catch(e){ err.textContent='Could not reach the team server. Check your signal.'; }
 }
@@ -1036,17 +1186,25 @@ async function createTeam(){
   if(!codeOk(code)){ err.textContent='Code must be 4 to 12 letters or numbers.'; return; }
   const pin=($('#tc_pin').value||'').trim(); if(!pinOk(pin)){ err.textContent='PIN must be 4 to 6 digits.'; return; }
   err.textContent='Checking code…';
-  try{ const r=await fetch(S.syncUrl+'/teams/'+encodeURIComponent(code)+'/state/updatedAt.json?t='+Date.now(),{cache:'no-store'}); const taken=await r.json();
+  try{
+    const r=await fbFetch(S.syncUrl+'/teams/'+encodeURIComponent(code)+'/state/updatedAt.json?t='+Date.now());
+    if(!r.ok){ err.textContent=r.status===401||r.status===403?'Sign-in required before creating a team.':'Could not reach the team server. Check your signal.'; return; }
+    const taken=await r.json();
     if(taken){ err.textContent='That code is taken. Pick another.'; return; }
-    S.team={name,coach,code,created:Date.now(),pin:pinHash(pin)}; S.role='coach'; S.roster=defaultRoster(); S.queues=defaultQueues(); S.game=null; S.history=[]; S.chat=[]; S.updatedAt=Date.now(); lastTeamHash='';
+    S.team={name,coach,code,created:Date.now()}; S.role='coach'; S.roster=defaultRoster(); S.queues=defaultQueues(); S.game=null; S.history=[]; S.chat=[]; S.updatedAt=Date.now(); lastTeamHash='';
+    if(FIREBASE_API_KEY){
+      const res=await becomeCoach(pin, true);
+      if(!res.ok){ S.team=null; S.role=''; err.textContent=res.reason||'Could not save the coach PIN.'; return; }
+    }
+    captureGroups(S.roster);
     closeSheet(); save(); await pushSync(); render();
-    openSheet('<h2>Team created</h2><div class="center"><div class="lbl">Your team code</div><div class="clock" style="margin:8px 0">'+esc(code)+'</div><div class="sub2" style="font-weight:700;color:var(--mut)">Give the code to parents and assistants. Coaches also need the PIN you just set (viewers do not). Edit your roster under the Roster tab.</div></div><button class="btn act big wide" data-a="close">Got it</button>');
+    openSheet('<h2>Team created</h2><div class="center"><div class="lbl">Your team code</div><div class="clock" style="margin:8px 0">'+esc(code)+'</div><div class="sub2" style="font-weight:700;color:var(--mut)">Give the code to parents and assistants. Coaches also need the PIN you just set (viewers do not). Rename the placeholder roster under the Roster tab.'+(FIREBASE_API_KEY?'':' The PIN is not stored until the Firebase web API key is added. Set it again under Edit team after that.')+'</div></div><button class="btn act big wide" data-a="close">Got it</button>');
     if(!S.seenGuide){ S.seenGuide=true; save(true); }
   }catch(e){ err.textContent='Could not reach the team server. Check your signal.'; }
 }
-function sheetRole(first){ openSheet('<h2>Who is using this phone?</h2>'+(teamPin()?'<div class="field"><label for="rp_pin">Coach PIN (needed for Coach)</label><input id="rp_pin" inputmode="numeric" autocomplete="off" placeholder="••••" style="font-size:22px;font-weight:900;letter-spacing:.2em"></div><div id="rp_err" class="sub2" style="color:var(--bad);font-weight:800"></div>':'')+'<button class="opt" data-a="setrole" data-r="coach"><div><div class="nm">Coach</div><div class="sub2">Runs the clock, subs and score</div></div><span class="arrow">›</span></button><button class="opt" data-a="setrole" data-r="viewer"><div><div class="nm">Viewer</div><div class="sub2">Parent or assistant: watch the lineup, next sub, score and minutes, and use the chat. Cannot change anything.</div></div><span class="arrow">›</span></button>'+(first?'':'<button class="btn ghost wide" data-a="close">Cancel</button>')); }
+function sheetRole(first){ openSheet('<h2>Who is using this phone?</h2><div class="field"><label for="rp_pin">Coach PIN (needed for Coach)</label><input id="rp_pin" inputmode="numeric" autocomplete="off" placeholder="••••" style="font-size:22px;font-weight:900;letter-spacing:.2em"></div><div id="rp_err" class="sub2" style="color:var(--bad);font-weight:800"></div><button class="opt" data-a="setrole" data-r="coach"><div><div class="nm">Coach</div><div class="sub2">Runs the clock, subs and score</div></div><span class="arrow">›</span></button><button class="opt" data-a="setrole" data-r="viewer"><div><div class="nm">Viewer</div><div class="sub2">Parent or assistant: watch the lineup, next sub, score and minutes, and use the chat. Cannot change anything.</div></div><span class="arrow">›</span></button>'+(first?'':'<button class="btn ghost wide" data-a="close">Cancel</button>')); }
 /* boot */
-load(); G=S.game;
+load(); loadAuth(); ensureAuth(); G=S.game;
 if(G && !isViewer() && (G.phase==='h1'||G.phase==='ht'||G.phase==='h2')){
   const d=document.createElement('div'); d.className='resume'; d.id='resume';
   d.innerHTML='<div class="lbl" style="color:var(--act)">'+esc(TEAMNAME())+'</div><div class="clock">'+fmt(clock())+'</div><div class="big">Game in progress</div><div style="color:var(--mut);font-weight:700">Clock '+(G.running?'kept running':'is paused')+'. Lineup, minutes and sub history are restored.</div><button class="btn ok big wide" data-a="resume">Resume game</button><button class="btn ghost wide" data-a="discard">Discard and start over</button>';

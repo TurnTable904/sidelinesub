@@ -1,0 +1,76 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "teams": {
+      ".read": false,
+      ".write": false,
+      "$code": {
+        ".read": "auth != null && $code.matches(/^[A-Z0-9]{4,12}$/)",
+        ".write": false,
+
+        "state": {
+          ".write": "auth != null && root.child('teams').child($code).child('coaches').child(auth.uid).val() === true",
+          ".validate": "newData.hasChildren(['updatedAt', 'state']) && (!newData.child('state').child('team').exists() || !newData.child('state').child('team').child('pin').exists())",
+          "state": {
+            "roster": {
+              "$player": {
+                ".validate": "!newData.hasChild('group')"
+              }
+            }
+          }
+        },
+
+        "games": {
+          ".write": "auth != null && root.child('teams').child($code).child('coaches').child(auth.uid).val() === true",
+          "$gameId": {
+            ".write": "auth != null && root.child('teams').child($code).child('coaches').child(auth.uid).val() === true"
+          }
+        },
+
+        "chat": {
+          ".write": "auth != null && root.child('teams').child($code).child('coaches').child(auth.uid).val() === true",
+          "$messageId": {
+            ".write": "auth != null && ((!newData.exists() && data.child('uid').val() === auth.uid) || (newData.child('uid').val() === auth.uid && newData.child('id').val() === $messageId && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('from').isString() && newData.child('from').val().length > 0 && newData.child('from').val().length <= 40 && newData.child('t').isNumber() && (!data.exists() || data.child('uid').val() === auth.uid)))"
+          }
+        },
+
+        "presence": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.child('t').isNumber() && (!newData.child('name').exists() || (newData.child('name').isString() && newData.child('name').val().length <= 40)) && (!newData.child('role').exists() || newData.child('role').val() === 'coach' || newData.child('role').val() === 'viewer')))"
+          }
+        },
+
+        "coaches": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && newData.val() === true && (data.val() === true || root.child('teamSecrets').child($code).child('ownerUid').val() === auth.uid || (root.child('teamSecrets').child($code).child('pinHash').isString() && root.child('teamSecrets').child($code).child('claims').child($uid).child('hash').val() === root.child('teamSecrets').child($code).child('pinHash').val()))"
+          }
+        }
+      }
+    },
+
+    "teamSecrets": {
+      ".read": false,
+      ".write": false,
+      "$code": {
+        "ownerUid": {
+          ".write": "auth != null && $code.matches(/^[A-Z0-9]{4,12}$/) && newData.val() === auth.uid && (data.val() === auth.uid || root.child('teams').child($code).child('coaches').child(auth.uid).val() === true || (data.val() == null && root.child('teams').child($code).child('state').val() == null))"
+        },
+        "pinHash": {
+          ".write": "auth != null && newData.isString() && newData.val().matches(/^[0-9a-f]{64}$/) && (root.child('teams').child($code).child('coaches').child(auth.uid).val() === true || root.child('teamSecrets').child($code).child('ownerUid').val() === auth.uid)"
+        },
+        "claims": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.child('hash').isString() && newData.child('hash').val().matches(/^[0-9a-f]{64}$/) && newData.child('hash').val() === root.child('teamSecrets').child($code).child('pinHash').val()))"
+          }
+        }
+      }
+    },
+
+    "app": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
