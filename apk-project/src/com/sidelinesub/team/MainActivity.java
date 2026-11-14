@@ -10,7 +10,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity implements Runnable {
   public void run(){ load(); }
-  static final int BUILD = 37;
+  static final int BUILD = 38;
   private WebView web;
   File bundleFile(){ return new File(getFilesDir(), "bundle.html"); }
   File verFile(){ return new File(getFilesDir(), "bundle.v"); }

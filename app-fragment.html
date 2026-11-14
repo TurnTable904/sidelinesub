@@ -91,6 +91,20 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .bub.empty .nm{font-size:13px}
 .bub.out{box-shadow:0 0 0 4px var(--bad),0 3px 8px rgba(0,0,0,.35)}
 .bub.low{box-shadow:0 0 0 4px var(--warn),0 3px 8px rgba(0,0,0,.35)}
+/* Long continuous stint. Light tint plus a thick ring so the name stays dark and readable in sunlight. */
+.bub.stint-y,.bub.stint-o,.bub.stint-r{z-index:2;border:4px solid transparent}
+.bub.stint-y{background:#fff3b0;border-color:#a87200;box-shadow:0 0 0 3px #ffe14a,0 0 14px 2px rgba(255,180,0,.95),0 3px 8px rgba(0,0,0,.35)}
+.bub.stint-o{background:#ffd7a6;border-color:#c24100;box-shadow:0 0 0 3px #ff7a18,0 0 14px 2px rgba(255,100,0,.95),0 3px 8px rgba(0,0,0,.35)}
+.bub.stint-r{background:#ffd0cb;border-color:#9d120c;box-shadow:0 0 0 4px #e10600,0 0 0 8px rgba(225,6,0,.4),0 3px 8px rgba(0,0,0,.35);animation:stintpulse 1.05s ease-in-out infinite}
+@keyframes stintpulse{50%{box-shadow:0 0 0 6px #ff2a1a,0 0 0 14px rgba(255,40,20,.55),0 3px 8px rgba(0,0,0,.35)}}
+@media (prefers-reduced-motion:reduce){.bub.stint-r{animation:none}}
+.bub.stint-y .nm,.bub.stint-o .nm,.bub.stint-r .nm,.bub.stint-y .tm,.bub.stint-o .tm,.bub.stint-r .tm{color:#102016}
+.bub.stint-y .nm small,.bub.stint-o .nm small,.bub.stint-r .nm small{color:#243028}
+.bub .stintb{display:none;margin:1px 0;padding:1px 6px;border-radius:999px;border:2px solid #1a1200;font-size:12px;font-weight:900;line-height:1.15;letter-spacing:0;pointer-events:none}
+.bub.stint-y .stintb,.bub.stint-o .stintb,.bub.stint-r .stintb{display:inline-block}
+.bub.stint-y .stintb{background:#ffe14a;color:#1a1200}
+.bub.stint-o .stintb{background:#ff7a18;color:#1a0a00}
+.bub.stint-r .stintb{background:#e10600;color:#fff;border-color:#3a0000}
 /* rec */
 .rec{background:var(--card);border-radius:16px;padding:14px;border:3px solid transparent}
 .rec.due{border-color:var(--sub)}
@@ -239,7 +253,11 @@ setFormation('7v7');
 const GROUPS = {core:'Core',dev:'Developing',support:'Needs support'};
 const GW = {core:0,dev:1,support:2};
 
-const DEFAULT_SETTINGS = {formation:'7v7', gameLen:50, halfLen:25, subInterval:5, minTarget:20, maxSubs:2, balance:true, weakMax:4, gkSafe:true, gkSafeLead:4, gkSafeAfter:20, gkBackLead:2, gkAuto:false, gkInterval:12, testMode:false, testTimers:true, autoUpdate:true};
+// stintYellow/Orange/Red are 40/60/80% of the 20-minute fair-play target (minTarget): 8, 12, 16.
+const MIN_TARGET_DEFAULT=20;
+const DEFAULT_SETTINGS = {formation:'7v7', gameLen:50, halfLen:25, subInterval:5, minTarget:MIN_TARGET_DEFAULT, maxSubs:2, balance:true, weakMax:4, gkSafe:true, gkSafeLead:4, gkSafeAfter:20, gkBackLead:2, gkAuto:false, gkInterval:12, stintWarn:true, stintYellow:Math.round(MIN_TARGET_DEFAULT*0.4), stintOrange:Math.round(MIN_TARGET_DEFAULT*0.6), stintRed:Math.round(MIN_TARGET_DEFAULT*0.8), stintSkipGk:true, testMode:false, testTimers:true, autoUpdate:true};
+const PHONE_SETTINGS=['testMode','testTimers','autoUpdate','stintWarn','stintYellow','stintOrange','stintRed','stintSkipGk'];
+function phoneSettings(src){ const o={}; src=src||{}; for(const k of PHONE_SETTINGS) if(src[k]!==undefined) o[k]=src[k]; return o; }
 
 function defaultRoster(){
   const r=(id,name,num,primary,auto,manual,group)=>({id,name,num,primary,auto,manual,group,avail:true,starts:0,benchStarts:0,games:0});
@@ -303,7 +321,7 @@ function sharedTeam(){
 function sharedRoster(){ return S.roster.map(p=>{ const c={...p}; delete c.group; return c; }); }
 function syncState(){
   if(!isViewer()) captureGroups(S.roster);
-  const st={...S.settings}; delete st.testMode; delete st.testTimers; delete st.autoUpdate;
+  const st={...S.settings}; for(const k of PHONE_SETTINGS) delete st[k];
   return {team:sharedTeam(),settings:st,roster:sharedRoster(),queues:S.queues,game:S.game};
 }
 function schedulePush(){ if(!S.syncUrl) return; clearTimeout(SYNC.timer); SYNC.timer=setTimeout(pushSync,(G&&G.phase==='setup')?400:1500); }
@@ -396,7 +414,7 @@ async function pullSync(force){
   SYNC.busy=false; syncBadge();
 }
 function normalize(st){ // Firebase drops empty arrays, empty objects and nulls; put them back
-  st=st||{}; st.settings={...DEFAULT_SETTINGS,...(st.settings||{})}; st.team=st.team||null;
+  st=st||{}; st.settings={...DEFAULT_SETTINGS,...(st.settings||{})}; clampStint(st.settings); st.team=st.team||null;
   st.roster=(Array.isArray(st.roster)?st.roster:Object.values(st.roster||{})).filter(Boolean).map(p=>({starts:0,benchStarts:0,games:0,avail:true,...p,auto:p.auto||[],manual:p.manual||[]}));
   captureGroups(st.roster); applyGroups(st.roster); if(st.team&&st.team.pinV===2) delete st.team.pin;
   st.queues=st.queues||{}; for(const pos of ROLES) st.queues[pos]=st.queues[pos]||[];
@@ -406,7 +424,7 @@ function normalize(st){ // Firebase drops empty arrays, empty objects and nulls;
   else st.game=null;
   return st;
 }
-function adoptRemote(d){ const keepPinV=!!(S.team&&S.team.pinV===2); const keep={testMode:S.settings.testMode,testTimers:S.settings.testTimers,autoUpdate:S.settings.autoUpdate}; const chat=S.chat||[]; const hist=S.history||[]; Object.assign(S,normalize(d.state)); if(keepPinV&&S.team){ S.team.pinV=2; delete S.team.pin; } Object.assign(S.settings,keep); S.chat=chat; { const ids=new Set(hist.map(g=>g.id).filter(Boolean)); for(const g of (S.history||[])) if(!g.id||!ids.has(g.id)) hist.push(g); S.history=hist; } applyFormation(); lastTeamHash=JSON.stringify(syncState()); SYNC.pushedHash=lastTeamHash; S.updatedAt=d.updatedAt; SYNC.status='ok'; SYNC.last=Date.now(); try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} syncQueues(); render(); }
+function adoptRemote(d){ const keepPinV=!!(S.team&&S.team.pinV===2); const keep=phoneSettings(S.settings); const chat=S.chat||[]; const hist=S.history||[]; Object.assign(S,normalize(d.state)); if(keepPinV&&S.team){ S.team.pinV=2; delete S.team.pin; } Object.assign(S.settings,keep); S.chat=chat; { const ids=new Set(hist.map(g=>g.id).filter(Boolean)); for(const g of (S.history||[])) if(!g.id||!ids.has(g.id)) hist.push(g); S.history=hist; } applyFormation(); lastTeamHash=JSON.stringify(syncState()); SYNC.pushedHash=lastTeamHash; S.updatedAt=d.updatedAt; SYNC.status='ok'; SYNC.last=Date.now(); try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} syncQueues(); render(); }
 function syncDiag(){ const t=v=>v?new Date(v).toLocaleTimeString():'never'; const g=S.game; return 'This phone: role '+(S.role||'?')+' · state stamped '+t(S.updatedAt)+' · game '+(g?g.phase:'none')+'<br>Team store: stamped '+t(SYNC.remoteAt)+' · game '+(SYNC.remotePhase||'?')+'<br>Phone clock now '+t(Date.now())+' · last: '+(SYNC.lastAction||'nothing yet')+(SYNC.lastErr?'<br>Error: '+esc(SYNC.lastErr):''); }
 function syncBadge(){ const el=document.getElementById('syncbadge'); if(!el) return; el.textContent=syncText(); el.style.color=SYNC.status==='err'?'var(--bad)':'var(--mut)'; }
 function syncText(){ if(!S.syncUrl||!CODE()) return ''; if(SYNC.status==='err') return '⚠ not synced'; if(SYNC.status==='ok') return '● synced '+Math.max(0,Math.round((Date.now()-SYNC.last)/1000))+'s ago'; return '○ sync…'; }
@@ -581,6 +599,39 @@ function stopClock(){ if(G.running){ G.base=clock(); G.running=false; G.startedA
 function ps(id){ if(!G.ps[id]) G.ps[id]={played:0,since:clock(),onField:false,maxBench:0,positions:{}}; return G.ps[id]; }
 function played(id,c){ const p=ps(id); return p.played + (p.onField ? c-p.since : 0); }
 function fieldStint(id,c){ const p=ps(id); return p.onField ? c-p.since : 0; }
+function clampInt(v,min,max,fallback){ v=Math.round(+v); if(!isFinite(v)) v=fallback; return Math.min(max,Math.max(min,v)); }
+function clampStint(s, edited){
+  if(!s) return;
+  if(s.stintWarn==null) s.stintWarn=true;
+  if(s.stintSkipGk==null) s.stintSkipGk=true;
+  let y=clampInt(s.stintYellow,1,60,Math.round(MIN_TARGET_DEFAULT*0.4));
+  let o=clampInt(s.stintOrange,2,90,Math.round(MIN_TARGET_DEFAULT*0.6));
+  let r=clampInt(s.stintRed,3,120,Math.round(MIN_TARGET_DEFAULT*0.8));
+  if(edited==='stintRed'){ if(o>=r) o=Math.max(2,r-1); if(y>=o) y=Math.max(1,o-1); }
+  else if(edited==='stintYellow'){ if(o<=y) o=y+1; if(r<=o) r=o+1; }
+  else { if(y>=o) y=Math.max(1,o-1); if(r<=o) r=o+1; }
+  s.stintYellow=y; s.stintOrange=o; s.stintRed=r;
+}
+function stintOn(){ return !!(S.settings&&S.settings.stintWarn&&G&&(G.phase==='h1'||G.phase==='ht'||G.phase==='h2')); }
+function stintLevel(id,c){
+  if(!stintOn()) return '';
+  const p=G.ps&&G.ps[id]; if(!p||!p.onField) return '';
+  if(S.settings.stintSkipGk!==false){ const slot=gkSlot(); if(slot&&G.field[slot]===id) return ''; }
+  const mins=fieldStint(id,c)/60;
+  const y=+S.settings.stintYellow, o=+S.settings.stintOrange, r=+S.settings.stintRed;
+  if(!(y>0)||mins<y) return '';
+  if(r>0&&mins>=r) return 'r';
+  if(o>0&&mins>=o) return 'o';
+  return 'y';
+}
+function stintBadge(id,c){ return Math.floor(fieldStint(id,c)/60)+'m'; }
+function paintStints(c){
+  document.querySelectorAll('.pitch .bub[data-id]').forEach(el=>{
+    const id=el.dataset.id; const lvl=stintLevel(id,c);
+    el.classList.toggle('stint-y',lvl==='y'); el.classList.toggle('stint-o',lvl==='o'); el.classList.toggle('stint-r',lvl==='r');
+    const b=el.querySelector('.stintb'); if(b) b.textContent=lvl?stintBadge(id,c):'';
+  });
+}
 function benchStint(id,c){ const p=ps(id); return p.onField ? 0 : Math.max(0,c-p.since); }
 function fieldIds(){ return POSID.map(p=>G.field[p]).filter(Boolean); }
 function posOf(id){ return POSID.find(p=>G.field[p]===id)||null; }
@@ -801,8 +852,9 @@ function renderHeader(){
 function bubble(pos,id,c,extra){
   const P=POS.find(p=>p.id===pos);
   if(!id) return '<button class="bub empty" style="left:'+P.x+'%;top:'+P.y+'%" data-a="pickfor" data-pos="'+esc(pos)+'"><div class="pos" style="color:#fff">'+ROLE[pos]+'</div><div class="nm">Tap to assign</div></button>';
-  const p=player(id);
-  return '<button class="bub '+(extra||'')+'" style="left:'+P.x+'%;top:'+P.y+'%" data-a="fieldtap" data-id="'+esc(id)+'"><div class="pos">'+ROLE[pos]+'</div><div class="nm">'+nm(p)+'</div><div class="tm" data-live="'+esc('pl:'+id)+'">'+(G.phase==='setup'?'':fmt(played(id,c)))+'</div></button>';
+  const p=player(id); const lvl=stintLevel(id,c);
+  const cls=[extra||'',lvl?('stint-'+lvl):''].filter(Boolean).join(' ');
+  return '<button class="bub '+cls+'" style="left:'+P.x+'%;top:'+P.y+'%" data-a="fieldtap" data-id="'+esc(id)+'"><div class="pos">'+ROLE[pos]+'</div><div class="nm">'+nm(p)+'</div><div class="stintb">'+(lvl?stintBadge(id,c):'')+'</div><div class="tm" data-live="'+esc('pl:'+id)+'">'+(G.phase==='setup'?'':fmt(played(id,c)))+'</div></button>';
 }
 
 function viewGame(){
@@ -934,11 +986,12 @@ function viewSettings(){
   return '<div class="lbl">Game</div>'+fsel+num('gameLen','Game length (min)',10,120,5)+num('halfLen','Half length (min)',5,60,5)+num('subInterval','Sub check every (min)',1,20)+num('minTarget','Minimum minutes per player',0,120)+num('maxSubs','Subs suggested per window (1 to 3)',1,3)
     +'<div class="lbl">Lineup balance</div>'+tog('balance','Balance lineups','Avoid stacking developing players at once')+num('weakMax','Max development load on field',0,14)+'<div style="font-size:14px;color:var(--mut);font-weight:700">Core = 0, Developing = 1, Needs support = 2 per player. Those labels stay on this phone. Default 4 (so all four developing players never start together).</div>'
     +'<div class="lbl">Goalkeeper</div>'+tog('gkSafe','Suggest a backup keeper when the lead is safe','Picks the approved keeper with the fewest GK minutes this season; starter moves to a field spot')+num('gkSafeLead','Safe lead (goals ahead)',1,10)+num('gkSafeAfter','Not before game minute',0,60)+num('gkBackLead','Put the starter back if lead drops to',0,10)+tog('gkAuto','Auto-rotate goalkeeper by time','Off = GK changes are manual only')+num('gkInterval','GK rotation interval (min)',1,60)
+    +'<div class="lbl">Long stint</div>'+tog('stintWarn','Highlight a player left in too long','Yellow, then orange, then red on the field chip. Pauses with the clock and clears when they come off.')+num('stintYellow','Yellow at (min)',1,60)+num('stintOrange','Orange at (min)',2,90)+num('stintRed','Red at (min)',3,120)+tog('stintSkipGk','Skip the goalkeeper','On by default. Keepers often stay the whole half.')+'<div style="font-size:14px;color:var(--mut);font-weight:700">Starts at 8, 12 and 16 minutes: 40%, 60% and 80% of the 20-minute minimum each player should get. The chip turns red before one stint uses most of a fair share. Changing the minimum later does not move these. Saved on this phone only.</div>'
     +'<div class="lbl">Testing</div>'+tog('testMode','Test mode','Shows +1/+5/+10 time advance on the game screen')+tog('testTimers','Test advance moves player timers too','Off = clock only')
     +'<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: '+(isViewer()?'Viewer':'Coach')+' · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div>'+(isViewer()?'':(pinIsSecure()?'':'<div class="warn w" style="margin-top:8px;font-size:14px">Set a new coach PIN under Edit team before the database is locked. The old PIN is not safe to keep.</div>')+'<div class="row" style="margin-top:8px"><button class="btn sm '+(pinIsSecure()?'ghost':'act')+' grow" data-a="editteam">Edit team / coach PIN</button></div>')+'<div class="card" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--mut)"><div class="lbl">Sync details</div>'+syncDiag()+'<div style="margin-top:6px">'+esc(authLineText())+'</div><div class="row" style="margin-top:8px"><button class="btn sm ghost" data-a="forcepull">Pull from team now</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="forcepush">Push my copy now</button>')+'</div></div>'+'</div>'
     +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(IS_APK?' (Android)':' (web)')+'</div><div style="font-size:14px;font-weight:700;color:var(--mut);margin-top:6px">This app does not download or install updates by itself. A new version means installing a new copy.</div></div>'
     +'<div class="lbl">Data</div><div class="row"><button class="btn ghost grow" data-a="history">Game history ('+S.history.length+')</button><button class="btn ghost" data-a="guide">How it works</button></div><div class="row"><button class="btn ghost grow" data-a="gotoqueues">Position rotation queues</button></div><div class="row"><button class="btn ghost grow" data-a="resetstats">Reset season stats (games / starts)</button></div><div class="row"><button class="btn ghost grow" data-a="resetroster">Reset roster to placeholders</button><button class="btn ghost bad" style="background:none;color:var(--bad)" data-a="wipe">Erase all</button></div>'
-    +'<div style="font-size:13px;color:var(--mut);font-weight:700">Names, numbers, the lineup, score, and chat sync to the shared team. Development labels stay on this coach phone. The clock uses timestamps, so it stays accurate while the screen is off.</div>';
+    +'<div style="font-size:13px;color:var(--mut);font-weight:700">Names, numbers, the lineup, score, and chat sync to the shared team. Development labels and long-stint warning thresholds stay on this coach phone. The clock uses timestamps, so it stays accurate while the screen is off.</div>';
 }
 
 /* ====================== SHEETS ====================== */
@@ -1031,7 +1084,7 @@ async function act(a,d,el){
     case 'delplayer': { S.roster=S.roster.filter(p=>p.id!==d.id); if(G){ for(const pos of POSID) if(G.field[pos]===d.id) G.field[pos]=null; } syncQueues(); closeSheet(); break; }
     case 'toggleavail': { const p=player(d.id); p.avail=!p.avail; if(!p.avail&&G){ for(const pos of POSID) if(G.field[pos]===d.id) G.field[pos]=null; } break; }
     case 'tog': S.settings[d.k]=!S.settings[d.k]; break;
-    case 'num': { const inp=$('#set_'+d.k); const v=Math.min(+inp.max,Math.max(+inp.min,(+inp.value||0)+(+d.d))); S.settings[d.k]=v; break; }
+    case 'num': { const inp=$('#set_'+d.k); const v=Math.min(+inp.max,Math.max(+inp.min,(+inp.value||0)+(+d.d))); S.settings[d.k]=v; if(/^stint(Yellow|Orange|Red)$/.test(d.k||'')) clampStint(S.settings,d.k); break; }
     case 'history': sheetHistory(); return;
     case 'showlog': openSheet('<h2>Subs this game</h2>'+(G.subs.length?'<div class="hist">'+G.subs.slice().reverse().map(logLine).join('')+'</div>':'<div class="card">No subs yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>'); return;
     case 'histdate': { const g=S.history[+d.i]; if(!g) return; if(!g.id) g.id='g'+Date.now()+Math.random().toString(36).slice(2,6); openSheet('<h2>Game date</h2><input id="hd" type="date" value="'+new Date(g.date).toISOString().slice(0,10)+'" style="font-size:20px;font-weight:900"><div id="hd_err" class="warn" hidden></div><button class="btn act big wide" data-a="histdatesave" data-id="'+esc(g.id)+'">Save</button><button class="btn ghost wide" data-a="history">Back</button>'); return; }
@@ -1133,7 +1186,7 @@ function bind(){
   $('#view').querySelectorAll('[data-a]').forEach(el=>el.onclick=e=>act(el.dataset.a,el.dataset,el));
   $('#hdr').querySelectorAll('[data-a]').forEach(el=>el.onclick=e=>act(el.dataset.a,el.dataset,el));
   const fs=$('#set_formation'); if(fs) fs.onchange=()=>{ S.settings.formation=fs.value; applyFormation(); if(G&&(G.phase==='setup'||G.phase==='done')){ G.field=Object.fromEntries(POSID.map(p=>[p,null])); } save(); render(); };
-  $('#view').querySelectorAll('input[data-k]').forEach(inp=>inp.onchange=()=>{ S.settings[inp.dataset.k]=Math.min(+inp.max,Math.max(+inp.min,+inp.value||0)); save(); render(); });
+  $('#view').querySelectorAll('input[data-k]').forEach(inp=>inp.onchange=()=>{ S.settings[inp.dataset.k]=Math.min(+inp.max,Math.max(+inp.min,+inp.value||0)); if(/^stint(Yellow|Orange|Red)$/.test(inp.dataset.k||'')) clampStint(S.settings,inp.dataset.k); save(); render(); });
   const opp=$('#opp'); if(opp) opp.onchange=()=>{ G.opponent=opp.value; save(); };
   const cf=$('#chatform'); if(cf){ cf.onsubmit=e=>{ e.preventDefault(); const v=$('#chatin').value; $('#chatin').value=''; sendChat(v); }; const v=$('#view'); v.scrollTop=v.scrollHeight; }
 }
@@ -1161,13 +1214,14 @@ setInterval(()=>{
     const halfEnd=(G.phase==='h1'&&c>=halfSecs())||(G.phase==='h2'&&c>=gameSecs());
     if(key!==lastRecKey||due!==lastDue||wk!==lastWarnKey||halfEnd){ lastRecKey=key; lastDue=due; lastWarnKey=wk; render(); }
   }
+  if(S.tab==='game') paintStints(c);
   if(S.tab==='minutes' && G.running && Math.floor(c)%5===0) render();
   if(G.running && Math.floor(c)%15===0) save(true);
 },1000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) render(); });
 
 /* first-run guide */
-function guide(){ openSheet('<h2>'+esc(TEAMNAME())+'</h2><div class="sub2" style="font-weight:800">How it works:</div><div class="opt"><div><div class="nm">1. Before the game</div><div class="sub2">Tap who is here, tap Suggest lineup, tap Kickoff.</div></div></div><div class="opt"><div><div class="nm">2. At kickoff</div><div class="sub2">Tap Start clock. Forgot? Tap the time and type what the ref has.</div></div></div><div class="opt"><div><div class="nm">3. During the game</div><div class="sub2">The orange box tells you one sub to make. Tap Make this sub when you do it. That is the whole job.</div></div></div><div class="opt"><div><div class="nm">4. Overrides</div><div class="sub2">Tap any field player to take him out, any bench player to put him in, Undo if you tapped wrong.</div></div></div><button class="btn act big wide" data-a="close">Got it</button>'); }
+function guide(){ openSheet('<h2>'+esc(TEAMNAME())+'</h2><div class="sub2" style="font-weight:800">How it works:</div><div class="opt"><div><div class="nm">1. Before the game</div><div class="sub2">Tap who is here, tap Suggest lineup, tap Kickoff.</div></div></div><div class="opt"><div><div class="nm">2. At kickoff</div><div class="sub2">Tap Start clock. Forgot? Tap the time and type what the ref has.</div></div></div><div class="opt"><div><div class="nm">3. During the game</div><div class="sub2">The orange box tells you one sub to make. Tap Make this sub when you do it. That is the whole job. A field chip turns yellow, then orange, then red when someone has been in a long time. The small badge is how long this stint has lasted.</div></div></div><div class="opt"><div><div class="nm">4. Overrides</div><div class="sub2">Tap any field player to take him out, any bench player to put him in, Undo if you tapped wrong.</div></div></div><button class="btn act big wide" data-a="close">Got it</button>'); }
 function codeOk(c){ return /^[A-Z0-9]{4,12}$/.test(c); }
 function pinOk(p){ return /^\d{4,6}$/.test(p||''); }
 function pinIsSecure(){ return !!(S.team&&S.team.pinV===2); }
