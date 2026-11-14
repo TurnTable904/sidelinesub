@@ -1,0 +1,5 @@
+apk-project/sideline.jks
+apk-project/*.jks
+apk-project/*.keystore
+apk-project/out/
+apk-project/*.apk
