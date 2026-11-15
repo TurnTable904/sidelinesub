@@ -1,6 +1,9 @@
 package com.sidelinesub.team;
 import android.app.Activity;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
@@ -41,10 +44,26 @@ public class MainActivity extends Activity implements Runnable {
     s.setUseWideViewPort(true);
     s.setLoadWithOverviewMode(true);
     web.setWebViewClient(new WebViewClient());
-    web.addJavascriptInterface(new NativeBridge(this), "BBNative");
+    NativeBridge bridge=new NativeBridge(this);
+    web.addJavascriptInterface(bridge, "BBNative");
+    web.addJavascriptInterface(bridge, "SidelineAndroid");
     web.setBackgroundColor(0xFFFFFFFF);
     setContentView(web);
     load();
+  }
+  @Override protected void onPause(){ super.onPause(); SubAlertService.pageVisible=false; }
+  @Override protected void onResume(){ super.onResume(); SubAlertService.pageVisible=true; }
+  void scheduleAlerts(long dueAt, long leadMs){
+    if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+      requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 41);
+    SubAlertService.start(this, dueAt, leadMs);
+  }
+  void cancelAlerts(){ SubAlertService.stop(this); }
+  void vibrateMs(int ms){
+    Vibrator v=(Vibrator)getSystemService(VIBRATOR_SERVICE);
+    if(v==null) return;
+    if(Build.VERSION.SDK_INT>=26) v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+    else v.vibrate(ms);
   }
   @Override public void onBackPressed(){ moveTaskToBack(true); }
 }

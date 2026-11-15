@@ -263,8 +263,8 @@ const GW = {core:0,dev:1,support:2};
 
 // stintYellow/Orange/Red are 40/60/80% of the 20-minute fair-play target (minTarget): 8, 12, 16.
 const MIN_TARGET_DEFAULT=20;
-const DEFAULT_SETTINGS = {formation:'7v7', gameLen:50, halfLen:25, subInterval:5, minTarget:MIN_TARGET_DEFAULT, maxSubs:2, balance:true, weakMax:4, gkSafe:true, gkSafeLead:4, gkSafeAfter:20, gkBackLead:2, gkAuto:false, gkInterval:12, stintWarn:true, stintYellow:Math.round(MIN_TARGET_DEFAULT*0.4), stintOrange:Math.round(MIN_TARGET_DEFAULT*0.6), stintRed:Math.round(MIN_TARGET_DEFAULT*0.8), stintSkipGk:true, testMode:false, testTimers:true, autoUpdate:true};
-const PHONE_SETTINGS=['testMode','testTimers','autoUpdate','stintWarn','stintYellow','stintOrange','stintRed','stintSkipGk'];
+const DEFAULT_SETTINGS = {formation:'7v7', gameLen:50, halfLen:25, subInterval:5, minTarget:MIN_TARGET_DEFAULT, maxSubs:2, balance:true, weakMax:4, gkSafe:true, gkSafeLead:4, gkSafeAfter:20, gkBackLead:2, gkAuto:false, gkInterval:12, stintWarn:true, stintYellow:Math.round(MIN_TARGET_DEFAULT*0.4), stintOrange:Math.round(MIN_TARGET_DEFAULT*0.6), stintRed:Math.round(MIN_TARGET_DEFAULT*0.8), stintSkipGk:true, alertOn:true, alertLead:20, testMode:false, testTimers:true, autoUpdate:true};
+const PHONE_SETTINGS=['testMode','testTimers','autoUpdate','stintWarn','stintYellow','stintOrange','stintRed','stintSkipGk','alertOn','alertLead'];
 function phoneSettings(src){ const o={}; src=src||{}; for(const k of PHONE_SETTINGS) if(src[k]!==undefined) o[k]=src[k]; return o; }
 
 function defaultRoster(){
@@ -602,8 +602,8 @@ function uid(){ return 'p'+Math.random().toString(36).slice(2,8); }
 const fmt=s=>{ s=Math.max(0,Math.round(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
 function clock(){ if(!G) return 0; return G.base + (G.running ? (Date.now()-G.startedAt)/1000 : 0); }
 function setBase(v){ G.base=v; if(G.running) G.startedAt=Date.now(); }
-function startClock(){ if(!G.running){ G.running=true; G.startedAt=Date.now(); } }
-function stopClock(){ if(G.running){ G.base=clock(); G.running=false; G.startedAt=null; } }
+function startClock(){ if(!G.running){ G.running=true; G.startedAt=Date.now(); } syncWakeLock(); syncNativeAlerts(); }
+function stopClock(){ if(G.running){ G.base=clock(); G.running=false; G.startedAt=null; } syncWakeLock(); syncNativeAlerts(); }
 function ps(id){ if(!G.ps[id]) G.ps[id]={played:0,since:clock(),onField:false,maxBench:0,positions:{}}; return G.ps[id]; }
 function played(id,c){ const p=ps(id); return p.played + (p.onField ? c-p.since : 0); }
 function fieldStint(id,c){ const p=ps(id); return p.onField ? c-p.since : 0; }
@@ -996,6 +996,7 @@ function viewSettings(){
     +'<div class="lbl">Lineup balance</div>'+tog('balance','Balance lineups','Avoid stacking developing players at once')+num('weakMax','Max development load on field',0,14)+'<div style="font-size:14px;color:var(--mut);font-weight:700">Core = 0, Developing = 1, Needs support = 2 per player. Those labels stay on this phone. Default 4 (so all four developing players never start together).</div>'
     +'<div class="lbl">Goalkeeper</div>'+tog('gkSafe','Suggest a backup keeper when the lead is safe','Picks the approved keeper with the fewest GK minutes this season; starter moves to a field spot')+num('gkSafeLead','Safe lead (goals ahead)',1,10)+num('gkSafeAfter','Not before game minute',0,60)+num('gkBackLead','Put the starter back if lead drops to',0,10)+tog('gkAuto','Auto-rotate goalkeeper by time','Off = GK changes are manual only')+num('gkInterval','GK rotation interval (min)',1,60)
     +'<div class="lbl">Long stint</div>'+tog('stintWarn','Highlight a player left in too long','Yellow, then orange, then red on the field chip. Pauses with the clock and clears when they come off.')+num('stintYellow','Yellow at (min)',1,60)+num('stintOrange','Orange at (min)',2,90)+num('stintRed','Red at (min)',3,120)+tog('stintSkipGk','Skip the goalkeeper','On by default. Keepers often stay the whole half.')+'<div style="font-size:14px;color:var(--mut);font-weight:700">Starts at 8, 12 and 16 minutes: 40%, 60% and 80% of the 20-minute minimum each player should get. The chip turns red before one stint uses most of a fair share. Changing the minimum later does not move these. Saved on this phone only.</div>'
+    +'<div class="lbl">Sub alerts</div>'+tog('alertOn','Sub alerts','Beep and vibrate before each sub window, then again when it is due. On the Android app a reminder still shows if the phone is locked. Saved on this phone only.')+num('alertLead','Seconds of warning',0,90,5)
     +'<div class="lbl">Testing</div>'+tog('testMode','Test mode','Shows +1/+5/+10 time advance on the game screen')+tog('testTimers','Test advance moves player timers too','Off = clock only')
     +'<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: '+(isViewer()?'Viewer':'Coach')+' · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div>'+(isViewer()?'':(pinIsSecure()?'':'<div class="warn w" style="margin-top:8px;font-size:14px">Set a new coach PIN under Edit team before the database is locked. The old PIN is not safe to keep.</div>')+'<div class="row" style="margin-top:8px"><button class="btn sm '+(pinIsSecure()?'ghost':'act')+' grow" data-a="editteam">Edit team / coach PIN</button></div>')+'<div class="card" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--mut)"><div class="lbl">Sync details</div>'+syncDiag()+'<div style="margin-top:6px">'+esc(authLineText())+'</div><div class="row" style="margin-top:8px"><button class="btn sm ghost" data-a="forcepull">Pull from team now</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="forcepush">Push my copy now</button>')+'</div></div>'+'</div>'
     +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(IS_APK?' (Android)':' (web)')+'</div><div style="font-size:14px;font-weight:700;color:var(--mut);margin-top:6px">This app does not download or install updates by itself. A new version means installing a new copy.</div></div>'
@@ -1345,8 +1346,8 @@ async function act(a,d,el){
       Object.assign(p,{name,num,primary,auto:auto.length?auto:[primary],manual,group}); captureGroups([p]); if($('#pl_games')){ p.games=Math.max(0,+$('#pl_games').value||0); p.starts=Math.min(p.games,Math.max(0,+$('#pl_starts').value||0)); p.benchStarts=p.games-p.starts; } syncQueues(); closeSheet(); break; }
     case 'delplayer': { S.roster=S.roster.filter(p=>p.id!==d.id); if(G){ for(const pos of POSID) if(G.field[pos]===d.id) G.field[pos]=null; } syncQueues(); closeSheet(); break; }
     case 'toggleavail': { const p=player(d.id); p.avail=!p.avail; if(!p.avail&&G){ for(const pos of POSID) if(G.field[pos]===d.id) G.field[pos]=null; } break; }
-    case 'tog': S.settings[d.k]=!S.settings[d.k]; break;
-    case 'num': { const inp=$('#set_'+d.k); const v=Math.min(+inp.max,Math.max(+inp.min,(+inp.value||0)+(+d.d))); S.settings[d.k]=v; if(/^stint(Yellow|Orange|Red)$/.test(d.k||'')) clampStint(S.settings,d.k); break; }
+    case 'tog': S.settings[d.k]=!S.settings[d.k]; if(d.k==='alertOn'){ nativeKey=''; syncNativeAlerts(); } break;
+    case 'num': { const inp=$('#set_'+d.k); const v=Math.min(+inp.max,Math.max(+inp.min,(+inp.value||0)+(+d.d))); S.settings[d.k]=v; if(/^stint(Yellow|Orange|Red)$/.test(d.k||'')) clampStint(S.settings,d.k); if(d.k==='alertLead'){ nativeKey=''; syncNativeAlerts(); } break; }
     case 'history': sheetHistory(); return;
     case 'histgame': sheetGameFinal(d); return;
     case 'showlog': openSheet('<h2>Subs this game</h2>'+(G.subs.length?'<div class="hist">'+G.subs.slice().reverse().map(logLine).join('')+'</div>':'<div class="card">No subs yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>'); return;
@@ -1461,6 +1462,7 @@ document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{ S.tab=b.data
 /* live tick: update numbers in place, re-render pieces only when they change */
 let lastRecKey='', lastWarnKey='', lastDue=null;
 setInterval(()=>{
+  syncWakeLock(); tickAlerts(); syncNativeAlerts();
   if(!G||G.phase==='setup'||G.phase==='done') return;
   const c=clock(); const st=S.settings;
   document.querySelectorAll('[data-live]').forEach(el=>{
@@ -1482,7 +1484,10 @@ setInterval(()=>{
   if(S.tab==='minutes' && G.running && Math.floor(c)%5===0) render();
   if(G.running && Math.floor(c)%15===0) save(true);
 },1000);
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden) render(); });
+document.addEventListener('visibilitychange',()=>{
+  syncWakeLock(); syncNativeAlerts();
+  if(!document.hidden){ tickAlerts(); render(); }
+});
 
 /* first-run guide */
 function guide(){ openSheet('<h2>'+esc(TEAMNAME())+'</h2><div class="sub2" style="font-weight:800">How it works:</div><div class="opt"><div><div class="nm">1. Before the game</div><div class="sub2">Tap who is here, tap Suggest lineup, tap Kickoff.</div></div></div><div class="opt"><div><div class="nm">2. At kickoff</div><div class="sub2">Tap Start clock. Forgot? Tap the time and type what the ref has.</div></div></div><div class="opt"><div><div class="nm">3. During the game</div><div class="sub2">The orange box tells you one sub to make. Tap Make this sub when you do it. That is the whole job. A field chip turns yellow, then orange, then red when someone has been in a long time. The small badge is how long this stint has lasted.</div></div></div><div class="opt"><div><div class="nm">4. Overrides</div><div class="sub2">Tap any field player to take him out, any bench player to put him in, Undo if you tapped wrong.</div></div></div><button class="btn act big wide" data-a="close">Got it</button>'); }
@@ -1673,7 +1678,73 @@ if(G && !isViewer() && (G.phase==='h1'||G.phase==='ht'||G.phase==='h2')){
   d.innerHTML='<div class="lbl" style="color:var(--act)">'+esc(TEAMNAME())+'</div><div class="clock">'+fmt(clock())+'</div><div class="big">Game in progress</div><div style="color:var(--mut);font-weight:700">Clock '+(G.running?'kept running':'is paused')+'. Lineup, minutes and sub history are restored.</div><button class="btn ok big wide" data-a="resume">Resume game</button><button class="btn ghost wide" data-a="discard">Discard and start over</button>';
   document.body.appendChild(d); d.querySelectorAll('[data-a]').forEach(el=>el.onclick=()=>act(el.dataset.a,el.dataset,el));
 }
-if('wakeLock' in navigator){ const wl=()=>navigator.wakeLock.request('screen').catch(()=>{}); wl(); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) wl(); }); }
+/* Sub alerts use the timestamp clock (base + elapsed since startedAt), not a ticking counter. */
+let beepCtx=null, alertMarks={before:0,at:0}, wakeSentinel=null, nativeKey='';
+function nativeBridge(){
+  const n=window.SidelineAndroid||(window.BBNative&&typeof window.BBNative.startGameService==='function'?window.BBNative:null);
+  return n||null;
+}
+function alertDue(){
+  if(!G||isViewer()||!S.settings.alertOn) return null;
+  if(!G.running||(G.phase!=='h1'&&G.phase!=='h2')) return null;
+  const span=Math.max(1,(+S.settings.subInterval||1)*60);
+  const lead=Math.min(Math.max(0,+S.settings.alertLead||0), span);
+  return {due:G.lastCheck+span, lead};
+}
+function beep(times){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return;
+    if(!beepCtx) beepCtx=new Ctx();
+    const ctx=beepCtx; if(ctx.state==='suspended') ctx.resume();
+    for(let i=0;i<(times||1);i++){
+      const o=ctx.createOscillator(), g=ctx.createGain(), t0=ctx.currentTime+i*0.18;
+      o.type='sine'; o.frequency.value=i?660:880; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.18, t0+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0+0.14);
+      o.start(t0); o.stop(t0+0.16);
+    }
+  }catch(e){}
+}
+function fireAlert(kind){
+  if(document.hidden) return;
+  const pattern=kind==='at'?[140,70,140]:[160];
+  try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+  beep(kind==='at'?2:1);
+}
+function tickAlerts(){
+  const w=alertDue(); if(!w) return;
+  const c=clock(), key=Math.round(w.due*10);
+  if(c>=w.due){
+    if(alertMarks.at!==key){ alertMarks.at=key; alertMarks.before=key; fireAlert('at'); }
+    return;
+  }
+  if(w.lead>0 && c>=w.due-w.lead && alertMarks.before!==key){ alertMarks.before=key; fireAlert('before'); }
+}
+function syncWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  const want=!!(G&&G.running&&(G.phase==='h1'||G.phase==='h2'));
+  if(want){
+    if(wakeSentinel) return;
+    navigator.wakeLock.request('screen').then(s=>{ wakeSentinel=s; s.addEventListener('release',()=>{ if(wakeSentinel===s) wakeSentinel=null; }); }).catch(()=>{});
+  } else if(wakeSentinel){
+    const s=wakeSentinel; wakeSentinel=null; s.release().catch(()=>{});
+  }
+}
+function syncNativeAlerts(){
+  const n=nativeBridge(); if(!n) return;
+  const w=alertDue();
+  if(!w){
+    if(nativeKey){ nativeKey=''; try{ n.stopGameService(); }catch(e){} }
+    return;
+  }
+  const dueAt=Date.now()+Math.max(0,(w.due-clock())*1000);
+  const key=Math.round(dueAt/1000)+':'+w.lead;
+  if(key===nativeKey) return;
+  nativeKey=key;
+  try{ n.startGameService(dueAt, w.lead*1000); }catch(e){}
+}
+document.addEventListener('pointerdown',()=>{ if(beepCtx&&beepCtx.state==='suspended') beepCtx.resume(); });
 render();
 if(!S.team){ sheetTeam(true); } else if(!S.role){ sheetRole(true); } else if(!S.seenGuide){ S.seenGuide=true; save(true); guide(); }
 </script>
