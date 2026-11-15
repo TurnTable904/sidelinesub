@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.BB_BUILD=38;</script>
+<script>window.BB_BUILD=39;</script>
 </head><body><title>Sideline Sub</title>
 
 <style>
@@ -204,6 +204,14 @@ td.r,th.r{text-align:right}
 .big{font-size:22px;font-weight:900}
 .sum td{font-size:17px;font-weight:800}
 .hist{background:var(--card);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px}
+button.gcard{text-align:left;width:100%;background:var(--card);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;color:inherit}
+button.gcard:active{background:var(--card2)}
+.gcard .nm{font-size:17px;font-weight:900}
+.gcard .ps{font-size:13px;font-weight:800;color:var(--mut)}
+.gcard .sc{font-size:28px;font-weight:900;line-height:1;letter-spacing:-.02em;flex:none}
+.gcard .arrow{font-weight:900;color:var(--mut);font-size:22px;line-height:1}
+.sumwrap{overflow-x:auto;flex-shrink:0}
+#view>*,#sheet>*{flex-shrink:0}
 .log{display:flex;gap:10px;align-items:baseline;font-weight:800;font-size:15px;padding:6px 0;border-bottom:1px solid var(--line)}
 .log .t{color:var(--mut);width:52px;flex:none}
 .in{color:var(--ok)} .outc{color:var(--bad)}
@@ -431,7 +439,7 @@ function normalize(st){ // Firebase drops empty arrays, empty objects and nulls;
   captureGroups(st.roster); applyGroups(st.roster); if(st.team&&st.team.pinV===2) delete st.team.pin;
   st.queues=st.queues||{}; for(const pos of ROLES) st.queues[pos]=st.queues[pos]||[];
   st.chat=(st.chat||[]).filter(Boolean).slice(-200);
-  st.history=(st.history||[]).filter(Boolean).map(g=>({...g,id:g.id||('g'+new Date(g.date).getTime()),subs:g.subs||[],players:g.players||[],starting:g.starting||{}}));
+  st.history=(st.history||[]).filter(Boolean).map(g=>({...g,id:g.id||('g'+new Date(g.date).getTime()),subs:(g.subs==null?null:g.subs),players:g.players||[],starting:g.starting||{}}));
   if(st.game){ const g=st.game; g.field=Object.fromEntries(POSID.map(x=>[x,(g.field&&g.field[x])||null])); g.ps=g.ps||{}; for(const id in g.ps){ g.ps[id].positions=g.ps[id].positions||{}; } g.subs=(g.subs||[]).filter(Boolean); g.undo=(g.undo||[]).filter(Boolean); g.starting=g.starting||null; g.altIdx=g.altIdx||0; g.lastCheck=g.lastCheck||0; g.base=g.base||0; g.running=!!g.running; g.startedAt=g.startedAt||null; g.opponent=g.opponent||''; g.goals=(g.goals||[]).filter(Boolean); if(g.gkSafeDeclined==null) g.gkSafeDeclined=-1; }
   else st.game=null;
   return st;
@@ -461,11 +469,11 @@ function histCanon(v){
 }
 function histSame(a,b){ return JSON.stringify(histCanon(a))===JSON.stringify(histCanon(b)); }
 function refreshHistoryViews(){
-  S.history.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  S.history.sort((a,b)=>histTime(b)-histTime(a));
   save(true);
-  if(S.tab==='settings'||S.tab==='game') render();
+  if(S.tab==='settings'||S.tab==='game'||S.tab==='minutes') render();
   const bg=document.getElementById('sheetbg');
-  if(bg&&!bg.hidden){ const h2=document.querySelector('#sheet h2'); const title=h2&&h2.textContent; if(title==='Season'||title==='Game history') sheetHistory(); }
+  if(bg&&!bg.hidden){ const h2=document.querySelector('#sheet h2'); const title=h2&&h2.textContent; if(title==='Season'||title==='Game history') sheetHistory(); else if(title==='Final'&&h2.dataset&&h2.dataset.gid) sheetGameFinal({id:h2.dataset.gid}); }
 }
 async function pushHistory(rec){
   if(!rec||!rec.id) return {ok:false, reason:'This game has no id, so it cannot be saved to the team.'};
@@ -846,7 +854,7 @@ function renderNav(){ document.querySelectorAll('#nav button').forEach(b=>{ b.cl
 function renderHeader(){
   const h=$('#hdr'); const st=S.settings;
   if(!G || G.phase==='setup' || G.phase==='done'){
-    h.innerHTML='<div class="row"><div class="grow"><div class="lbl" style="color:var(--act)">'+esc(TEAMNAME())+(COACHNAME()?' · '+esc(COACHNAME()):'')+(isViewer()?'':' <button id="presbadge" data-a="presence" style="font-weight:800;color:var(--mut)">'+(watching().length?'👀 '+watching().length:'')+'</button>')+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="big">'+(G&&G.phase==='done'?'Final':'Before kickoff')+'</div></div>'+(isViewer()?'<span class="viewerpill">VIEWER</span>':st.testMode?'<span class="testpill">TEST MODE</span>':'')+'</div>';
+    h.innerHTML='<div class="row"><div class="grow"><div class="lbl" style="color:var(--act)">'+esc(TEAMNAME())+(COACHNAME()?' · '+esc(COACHNAME()):'')+(isViewer()?'':' <button id="presbadge" data-a="presence" style="font-weight:800;color:var(--mut)">'+(watching().length?'👀 '+watching().length:'')+'</button>')+' <span id="syncbadge" style="font-weight:700;text-transform:none;letter-spacing:0">'+syncText()+'</span></div><div class="big">'+(S.tab==='minutes'?'Season':(G&&G.phase==='done'?'Final':'Before kickoff'))+'</div></div>'+(isViewer()?'<span class="viewerpill">VIEWER</span>':st.testMode?'<span class="testpill">TEST MODE</span>':'')+'</div>';
     return;
   }
   const c=clock(); const half=G.phase==='h1'?'1st half':G.phase==='ht'?'Halftime':'2nd half';
@@ -977,15 +985,16 @@ function viewQueues(){
 }
 
 function viewMinutes(){
-  if(!G||G.phase==='setup') return '<div class="card">Minutes show once the game starts. Minimum target is '+S.settings.minTarget+' min (change in Settings).</div>';
+  const live=G&&G.phase!=='setup'&&G.phase!=='done';
+  if(!live) return '<div class="lbl">Season</div>'+seasonBody();
   const c=clock(); const rows=availRoster().map(p=>({p,pl:played(p.id,c),s:ptStatus(p.id,c)})).sort((a,b)=>a.pl-b.pl);
   const tag=s=>s.code==='ok'?'<span class="tag ok">✓</span>':s.code==='watch'?'<span class="tag w">Watch</span>':s.code==='priority'?'<span class="tag b">⚠ Priority</span>':s.code==='cant'?'<span class="tag b">Can\'t reach</span>':'<span class="tag b">Missed</span>';
-  return '<div class="card" style="font-weight:700">'+fmt(Math.max(0,gameSecs()-c))+' left · target '+S.settings.minTarget+':00 · projection assumes a fair share of the remaining time</div><table><tr><th>Player</th><th class="r">Played</th><th class="r">Now</th><th class="r">Proj.</th><th></th></tr>'+rows.map(r=>{const on=ps(r.p.id).onField;return '<tr><td><b>'+esc(r.p.name)+'</b><br><small style="color:var(--mut)">'+(on?posOf(r.p.id)+' · on '+fmt(fieldStint(r.p.id,c)):'bench · '+fmt(benchStint(r.p.id,c)))+'</small></td><td class="r"><b>'+fmt(r.pl)+'</b></td><td class="r">'+(on?'<span class="in">▲</span>':'<span class="outc">▼</span>')+'</td><td class="r">'+fmt(r.s.projected)+'</td><td>'+tag(r.s)+'</td></tr>';}).join('')+'</table>';
+  return '<div class="row"><button class="btn act grow" data-a="history">Season</button></div><div class="card" style="font-weight:700">'+fmt(Math.max(0,gameSecs()-c))+' left · target '+S.settings.minTarget+':00 · projection assumes a fair share of the remaining time</div><table><tr><th>Player</th><th class="r">Played</th><th class="r">Now</th><th class="r">Proj.</th><th></th></tr>'+rows.map(r=>{const on=ps(r.p.id).onField;return '<tr><td><b>'+esc(r.p.name)+'</b><br><small style="color:var(--mut)">'+(on?posOf(r.p.id)+' · on '+fmt(fieldStint(r.p.id,c)):'bench · '+fmt(benchStint(r.p.id,c)))+'</small></td><td class="r"><b>'+fmt(r.pl)+'</b></td><td class="r">'+(on?'<span class="in">▲</span>':'<span class="outc">▼</span>')+'</td><td class="r">'+fmt(r.s.projected)+'</td><td>'+tag(r.s)+'</td></tr>';}).join('')+'</table>';
 }
 
 function viewSettingsViewer(tog){
   return '<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: Viewer · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div></div>'
-    +'<div class="row"><button class="btn act grow" data-a="history">Season results &amp; minutes</button></div>'
+    +'<div class="row"><button class="btn act grow" data-a="history">Season ('+S.history.length+')</button></div>'
     +'<div style="font-size:13px;color:var(--mut);font-weight:700">Names, numbers, the lineup, score, and chat are shared with this team.</div>'
     +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(IS_APK?' (Android)':' (web)')+'</div><div style="font-size:14px;font-weight:700;color:var(--mut);margin-top:6px">This app does not download or install updates by itself. A new version means installing a new copy.</div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="forcepull">Refresh from team</button></div></div>';
 }
@@ -1002,7 +1011,7 @@ function viewSettings(){
     +'<div class="lbl">Testing</div>'+tog('testMode','Test mode','Shows +1/+5/+10 time advance on the game screen')+tog('testTimers','Test advance moves player timers too','Off = clock only')
     +'<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: '+(isViewer()?'Viewer':'Coach')+' · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div>'+(isViewer()?'':(pinIsSecure()?'':'<div class="warn w" style="margin-top:8px;font-size:14px">Set a new coach PIN under Edit team before the database is locked. The old PIN is not safe to keep.</div>')+'<div class="row" style="margin-top:8px"><button class="btn sm '+(pinIsSecure()?'ghost':'act')+' grow" data-a="editteam">Edit team / coach PIN</button></div>')+'<div class="card" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--mut)"><div class="lbl">Sync details</div>'+syncDiag()+'<div style="margin-top:6px">'+esc(authLineText())+'</div><div class="row" style="margin-top:8px"><button class="btn sm ghost" data-a="forcepull">Pull from team now</button>'+(isViewer()?'':'<button class="btn sm ghost" data-a="forcepush">Push my copy now</button>')+'</div></div>'+'</div>'
     +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(IS_APK?' (Android)':' (web)')+'</div><div style="font-size:14px;font-weight:700;color:var(--mut);margin-top:6px">This app does not download or install updates by itself. A new version means installing a new copy.</div></div>'
-    +'<div class="lbl">Data</div><div class="row"><button class="btn ghost grow" data-a="history">Game history ('+S.history.length+')</button><button class="btn ghost" data-a="guide">How it works</button></div><div class="row"><button class="btn ghost grow" data-a="gotoqueues">Position rotation queues</button></div><div class="row"><button class="btn ghost grow" data-a="resetstats">Reset season stats (games / starts)</button></div><div class="row"><button class="btn ghost grow" data-a="resetroster">Reset roster to placeholders</button><button class="btn ghost bad" style="background:none;color:var(--bad)" data-a="wipe">Erase all</button></div>'
+    +'<div class="lbl">Data</div><div class="row"><button class="btn ghost grow" data-a="history">Season ('+S.history.length+')</button><button class="btn ghost" data-a="guide">How it works</button></div><div class="row"><button class="btn ghost grow" data-a="gotoqueues">Position rotation queues</button></div><div class="row"><button class="btn ghost grow" data-a="resetstats">Reset season stats (games / starts)</button></div><div class="row"><button class="btn ghost grow" data-a="resetroster">Reset roster to placeholders</button><button class="btn ghost bad" style="background:none;color:var(--bad)" data-a="wipe">Erase all</button></div>'
     +'<div style="font-size:13px;color:var(--mut);font-weight:700">Names, numbers, the lineup, score, and chat sync to the shared team. Development labels and long-stint warning thresholds stay on this coach phone. The clock uses timestamps, so it stays accurate while the screen is off.</div>';
 }
 
@@ -1043,17 +1052,270 @@ function sheetPlayer(id){
     +'<div class="field"><label for="pl_group">Development group (stays on this phone, not shared)</label><select id="pl_group">'+Object.entries(GROUPS).map(([k,v])=>'<option value="'+esc(k)+'" '+(p.group===k?'selected':'')+'>'+esc(v)+'</option>').join('')+'</select></div>'
     +'<button class="btn act big wide" data-a="saveplayer">Save</button>'+(id?'<button class="btn ghost wide" style="color:var(--bad)" data-a="delplayer" data-id="'+esc(id)+'">Delete player</button>':'')+'<button class="btn ghost wide" data-a="close">Cancel</button>');
 }
-function sheetHistoryViewer(){
-  openSheet('<h2>Season</h2>'+(S.history.length?S.history.map(g=>{ const sc=g.score||{us:0,them:0}; const cnt={}; for(const x of (g.goals||[])){ if(x.us&&x.scorerId){ const pl=player(x.scorerId); if(pl) cnt[pl.name]=(cnt[pl.name]||0)+1; } }
-    return '<div class="hist"><div class="row"><b class="grow">'+new Date(g.date).toLocaleDateString()+(g.opponent?' vs '+esc(g.opponent):'')+'</b><span class="big">'+sc.us+' – '+sc.them+'</span></div>'+(Object.keys(cnt).length?'<div style="font-size:14px;font-weight:700;color:var(--mut)">Goals: '+Object.entries(cnt).map(([n,c])=>esc(n)+(c>1?' ×'+c:'')).join(', ')+'</div>':'')+'<table style="margin-top:6px"><tr><th>Player</th><th class="r">Minutes</th><th>Positions</th></tr>'+(g.players||[]).slice().sort((a,b)=>b.played-a.played).map(p=>'<tr><td>'+esc(p.name)+(p.start?' <span class="tag g">start</span>':'')+'</td><td class="r"><b>'+fmt(p.played)+'</b></td><td>'+(p.positions||[]).join(' ')+'</td></tr>').join('')+'</table></div>'; }).join(''):'<div class="card">No games yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
+/* Season reads saved history only. It does not write a new game shape. */
+function asList(v){
+  if(!v) return [];
+  if(Array.isArray(v)) return v.filter(Boolean);
+  if(typeof v==='object'){
+    const keys=Object.keys(v);
+    keys.sort((a,b)=>{ const na=+a,nb=+b,an=a!==''&&isFinite(na),bn=b!==''&&isFinite(nb); if(an&&bn) return na-nb; return a<b?-1:a>b?1:0; });
+    return keys.map(k=>v[k]).filter(x=>x&&typeof x==='object');
+  }
+  return [];
 }
-function sheetHistory(){ if(isViewer()) return sheetHistoryViewer();
-  openSheet('<h2>Game history</h2>'+(S.history.length?S.history.map((g,i)=>'<div class="hist"><b><button data-a="histdate" data-i="'+i+'" style="font-weight:900;text-decoration:underline">'+new Date(g.date).toLocaleDateString()+'</button>'+(g.opponent?' vs '+esc(g.opponent):'')+'</b> · '+fmt(g.len)+' · '+g.subs.filter(s=>!s.swap).length+' subs<div style="font-size:14px">'+g.players.slice().sort((a,b)=>a.played-b.played).map(p=>esc(p.name)+' '+fmt(p.played)+(p.played<g.target*60?' ⚠':'')).join(' · ')+'</div><button class="btn sm ghost" data-a="delhist" data-i="'+esc(i)+'">Delete</button></div>').join(''):'<div class="card">No completed games yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>');
+function histPlayers(g){ return asList(g&&g.players); }
+function histSubs(g){ return (g&&g.subs!=null)?asList(g.subs):[]; }
+function histGoals(g){ return asList(g&&g.goals); }
+function histTime(g){ const t=new Date(g&&g.date).getTime(); return isFinite(t)?t:0; }
+function histSorted(){ return (S.history||[]).filter(Boolean).slice().sort((a,b)=>histTime(b)-histTime(a)); }
+function histBy(d){
+  if(!d) return null;
+  if(d.id){ const g=(S.history||[]).find(x=>x&&x.id===d.id); if(g) return g; }
+  if(d.i!=null&&d.i!==''){ const g=(S.history||[])[+d.i]; if(g) return g; }
+  return null;
+}
+function histScore(g){
+  if(!g) return null;
+  const s=g.score;
+  if(s&&isFinite(+s.us)&&isFinite(+s.them)) return {us:+s.us,them:+s.them};
+  if(g.goals==null) return null;
+  const gl=histGoals(g);
+  return {us:gl.filter(x=>x.us).length,them:gl.filter(x=>!x.us).length};
+}
+function histTargetSecs(g){
+  if(!g||g.target==null||g.target==='') return null;
+  const n=+g.target; return isFinite(n)?n*60:null;
+}
+function playerStarted(g,p){
+  if(!p) return null;
+  if(p.start===true||p.start===false) return p.start;
+  const st=g&&g.starting;
+  if(st&&typeof st==='object'){ const ids=Object.values(st).filter(Boolean); if(ids.length) return ids.includes(p.id); }
+  return null;
+}
+function posNames(p){
+  const pos=p&&p.positions; if(!pos) return [];
+  if(Array.isArray(pos)) return pos.filter(x=>typeof x==='string'&&x);
+  if(typeof pos==='object'){
+    const keys=Object.keys(pos); if(!keys.length) return [];
+    if(keys.every(k=>/^\d+$/.test(k))) return keys.sort((a,b)=>(+a)-(+b)).map(k=>pos[k]).filter(x=>typeof x==='string'&&x);
+    return keys.filter(k=>pos[k]!=null&&pos[k]!==false&&pos[k]!=='');
+  }
+  return [];
+}
+function positionsInGame(g,p){
+  const listed=posNames(p); if(listed.length) return [...new Set(listed)];
+  const set=[]; const add=pos=>{ if(pos&&set.indexOf(pos)<0) set.push(pos); };
+  const st=g&&g.starting;
+  if(st&&typeof st==='object'&&!Array.isArray(st)){ for(const pos of Object.keys(st)) if(st[pos]===p.id) add(pos); }
+  for(const s of histSubs(g)){
+    if(!s) continue;
+    if(s.swap&&Array.isArray(s.swap)){ const parts=String(s.pos||'').split('/'); if(s.swap[0]===p.id) add(parts[0]); if(s.swap[1]===p.id) add(parts[1]); }
+    else if(s.inId===p.id) add(s.pos);
+  }
+  return set;
+}
+function benchFromLog(g,p){
+  if(!p||!p.id||!g||g.subs==null) return null;
+  const len=+g.len; if(!isFinite(len)) return null;
+  const id=p.id;
+  const mine=histSubs(g).filter(s=>s&&!s.swap&&(s.inId===id||s.outId===id));
+  if(mine.some(s=>!isFinite(+s.t))) return null;
+  mine.sort((a,b)=>(+a.t)-(+b.t));
+  let started=playerStarted(g,p);
+  if(started==null){
+    if(!mine.length) return null;
+    if(mine[0].outId===id&&mine[0].inId!==id) started=true;
+    else if(mine[0].inId===id&&mine[0].outId!==id) started=false;
+    else return null;
+  }
+  let onField=!!started, since=0, maxB=0;
+  for(const s of mine){
+    const t=Math.max(0,+s.t);
+    if(s.inId===id&&!onField){ maxB=Math.max(maxB,t-since); onField=true; since=t; }
+    else if(s.outId===id&&onField){ onField=false; since=t; }
+  }
+  if(!onField) maxB=Math.max(maxB,len-since);
+  return Math.max(0,Math.round(maxB));
+}
+function playerMaxBench(g,p){
+  if(p&&p.maxBench!=null&&p.maxBench!==''&&isFinite(+p.maxBench)) return Math.max(0,Math.round(+p.maxBench));
+  return benchFromLog(g,p);
+}
+function histName(id,g){
+  const pl=g?histPlayers(g).find(p=>p&&p.id===id):null;
+  if(pl&&pl.name) return pl.name;
+  const r=player(id); return r&&r.name?r.name:'';
+}
+function scorerNames(g){
+  const out=[];
+  for(const x of histGoals(g)){ if(!x||!x.us||!x.scorerId) continue; const n=histName(x.scorerId,g); if(n) out.push(n); }
+  return out;
+}
+function scorerSummary(names){
+  const cnt={}, order=[];
+  for(const n of names){ if(!cnt[n]) order.push(n); cnt[n]=(cnt[n]||0)+1; }
+  return order.map(n=>esc(n)+(cnt[n]>1?' ×'+cnt[n]:'')).join(', ');
+}
+function gameTargetLine(g){
+  const t=histTargetSecs(g), players=histPlayers(g);
+  if(t==null) return {kind:'none'};
+  if(!players.length) return {kind:'empty'};
+  const missed=players.filter(p=>!(isFinite(+p.played)&&+p.played>=t));
+  if(!missed.length) return {kind:'ok',mins:g.target};
+  return {kind:'short',mins:g.target,n:missed.length,names:missed.map(p=>p.name||'Player')};
+}
+function targetPhrase(g){
+  const st=gameTargetLine(g);
+  if(st.kind==='ok') return {html:'<span class="in">✓ Everyone reached '+esc(st.mins)+' min</span>', plain:'✓ Everyone reached '+st.mins+' min'};
+  if(st.kind==='short') return {html:'<span class="outc">⚠ '+st.n+' under '+esc(st.mins)+' min</span>', plain:'⚠ '+st.n+' under '+st.mins+' min: '+st.names.join(', ')};
+  if(st.kind==='none') return {html:'<span style="color:var(--mut)">Target not saved</span>', plain:'Target not saved for this game'};
+  return {html:'<span style="color:var(--mut)">No minutes saved</span>', plain:'No player minutes saved'};
+}
+function histWhen(g){
+  const d=new Date(g&&g.date); if(isNaN(d.getTime())) return 'Undated';
+  const opts={weekday:'short',month:'short',day:'numeric'};
+  if(d.getFullYear()!==new Date().getFullYear()) opts.year='numeric';
+  return d.toLocaleDateString(undefined,opts);
+}
+function subCountLabel(g){
+  if(!g||g.subs==null) return 'Subs not saved';
+  const n=histSubs(g).filter(s=>!s.swap).length;
+  return n+' sub'+(n===1?'':'s');
+}
+function posCountLine(pos){
+  const keys=Object.keys(pos||{}); if(!keys.length) return '';
+  keys.sort((a,b)=>(pos[b]-pos[a])||(a<b?-1:a>b?1:0));
+  return keys.map(k=>esc(k)+' ×'+pos[k]).join(' · ');
+}
+function seasonRollup(){
+  const games=histSorted();
+  let w=0,d=0,l=0,gf=0,ga=0,scored=0,unscored=0,noTarget=0,noBench=0;
+  const byId=new Map();
+  const rosterIds=(S.roster||[]).map(p=>p.id);
+  function row(id,name){
+    let r=byId.get(id);
+    if(!r){ r={id,name:name||'Player',games:0,starts:0,secs:0,goals:0,hit:0,hitOf:0,bench:null,pos:{}}; byId.set(id,r); }
+    else if(name&&r.name==='Player') r.name=name;
+    return r;
+  }
+  for(const g of games){
+    const sc=histScore(g);
+    if(sc){ scored++; gf+=sc.us; ga+=sc.them; if(sc.us>sc.them) w++; else if(sc.us<sc.them) l++; else d++; }
+    else unscored++;
+    if(histTargetSecs(g)==null) noTarget++;
+    const t=histTargetSecs(g);
+    for(const p of histPlayers(g)){
+      if(!p||!p.id) continue;
+      const r=row(p.id,p.name);
+      r.games++;
+      if(playerStarted(g,p)===true) r.starts++;
+      if(isFinite(+p.played)) r.secs+=Math.max(0,+p.played);
+      if(t!=null&&isFinite(+p.played)){ r.hitOf++; if(+p.played>=t) r.hit++; }
+      const b=playerMaxBench(g,p);
+      if(b==null) noBench++; else r.bench=r.bench==null?b:Math.max(r.bench,b);
+      for(const pos of positionsInGame(g,p)) r.pos[pos]=(r.pos[pos]||0)+1;
+    }
+    for(const x of histGoals(g)){
+      if(!x||!x.us||!x.scorerId) continue;
+      row(x.scorerId,histName(x.scorerId,g)).goals++;
+    }
+  }
+  for(const p of (S.roster||[])){ const r=byId.get(p.id); if(r&&p.name) r.name=p.name; }
+  const players=[...byId.values()];
+  players.sort((a,b)=>{
+    const ia=rosterIds.indexOf(a.id), ib=rosterIds.indexOf(b.id);
+    const ra=ia<0?10000:ia, rb=ib<0?10000:ib;
+    if(ra!==rb) return ra-rb;
+    return String(a.name).localeCompare(String(b.name));
+  });
+  return {games:games.length,w,d,l,gf,ga,scored,unscored,noTarget,noBench,players};
+}
+function plural(n,word){ const w=n===1?word:(word==='loss'?'losses':word+'s'); return n+' '+w; }
+function seasonBody(){
+  const games=histSorted();
+  if(!games.length) return '<div class="card">No completed games yet.</div>';
+  const roll=seasonRollup();
+  let h='<div class="card"><div class="lbl">Record</div><div class="clock" style="font-size:34px">'+(roll.scored?roll.w+' – '+roll.d+' – '+roll.l:'–')+'</div><div style="font-weight:800;color:var(--mut);margin-top:4px">';
+  h+=roll.scored?(plural(roll.unscored?roll.scored:roll.games, roll.unscored?'scored game':'game')+' · '+plural(roll.w,'win')+' · '+plural(roll.d,'draw')+' · '+plural(roll.l,'loss')+' · '+roll.gf+' for · '+roll.ga+' against'):'No scores saved';
+  h+='</div>';
+  if(roll.unscored) h+='<div style="margin-top:6px;font-size:14px;font-weight:700;color:var(--mut)">'+plural(roll.unscored,'game')+' with no score saved, left out of the record.</div>';
+  h+='</div>';
+  if(roll.players.length){
+    h+='<div class="lbl">Players</div><div style="font-size:13px;font-weight:700;color:var(--mut)">Position counts are games at that spot. Saved history does not store minutes per position.</div><div class="bench">';
+    h+=roll.players.map(p=>{
+      const avg=p.games?fmt(p.secs/p.games):'–';
+      const pos=posCountLine(p.pos);
+      return '<div class="bp"><div class="grow"><div class="nm">'+esc(p.name)+'</div>'
+        +'<div class="ps">'+plural(p.games,'game')+' · '+plural(p.starts,'start')+' · '+plural(p.goals,'goal')+'</div>'
+        +'<div class="ps">'+fmt(p.secs)+' played · avg '+avg+'</div>'
+        +'<div class="ps">Hit target '+(p.hitOf?p.hit+'/'+p.hitOf:'–')+' · longest bench '+(p.bench==null?'–':fmt(p.bench))+'</div>'
+        +'<div class="ps">'+(pos||'Positions –')+'</div></div></div>';
+    }).join('');
+    h+='</div>';
+  }
+  if(roll.noTarget||roll.noBench){
+    h+='<div class="card" style="font-size:14px;font-weight:700;color:var(--mut)">';
+    if(roll.noTarget) h+='<div>Games with no saved minutes target are left out of the target count.</div>';
+    if(roll.noBench) h+='<div>A dash for bench means that game did not save a max bench, and the sub log was not enough to work it out.</div>';
+    h+='</div>';
+  }
+  h+='<div class="lbl">Games</div>';
+  h+=games.map(g=>{
+    const sc=histScore(g), names=scorerNames(g), phrase=targetPhrase(g);
+    const idAttr=g.id?' data-id="'+esc(g.id)+'"':' data-i="'+(S.history||[]).indexOf(g)+'"';
+    return '<button type="button" class="gcard" data-a="histgame"'+idAttr+'>'
+      +'<div class="row"><div class="grow"><div class="nm">'+esc(histWhen(g))+(g.opponent?' · vs '+esc(g.opponent):'')+'</div><div class="ps">'+(isFinite(+g.len)?fmt(+g.len)+' played':'Length not saved')+' · '+subCountLabel(g)+'</div></div><div class="sc">'+(sc?sc.us+' – '+sc.them:'–')+'</div></div>'
+      +(names.length?'<div style="font-weight:800">'+scorerSummary(names)+'</div>':'')
+      +'<div class="row"><span style="font-weight:900">'+phrase.html+'</span><span class="arrow">›</span></div></button>';
+  }).join('');
+  return h;
+}
+function histLogLine(g,s){
+  if(s.swap){ const a=histName(s.swap[0],g)||'?', b=histName(s.swap[1],g)||'?'; return '<div class="log"><span class="t">'+fmt(+s.t||0)+'</span><span>'+esc(a)+' ⇄ '+esc(b)+' swapped</span></div>'; }
+  const i=s.inId?histName(s.inId,g):'', o=s.outId?histName(s.outId,g):'';
+  return '<div class="log"><span class="t">'+fmt(+s.t||0)+'</span><span><span class="in">'+esc(i||'?')+' IN</span> → '+esc(s.pos||'')+' · <span class="outc">'+esc(o||'?')+' OUT</span>'+(s.manual?' <span class="tag g">manual</span>':'')+'</span></div>';
+}
+function sheetGameFinal(d){
+  const g=histBy(d); if(!g){ sheetHistory(); return; }
+  const rows=histPlayers(g).slice().sort((a,b)=>(+a.played||0)-(+b.played||0));
+  const phrase=targetPhrase(g), sc=histScore(g), names=scorerNames(g), subs=histSubs(g), target=histTargetSecs(g);
+  const lenBit=isFinite(+g.len)?fmt(+g.len)+' played':'length not saved';
+  let h='<h2 data-gid="'+esc(g.id||'')+'">Final</h2>';
+  h+='<div class="card"><div class="lbl">'+esc(TEAMNAME())+' · Final · '+esc(histWhen(g))+' · '+lenBit+'</div>';
+  h+='<div class="big" style="margin-top:4px">'+esc(phrase.plain)+'</div>';
+  h+='<div style="margin-top:6px;color:var(--mut);font-weight:700">'+subCountLabel(g)+(g.opponent?' · vs '+esc(g.opponent):'')+'</div>';
+  h+='<div class="clock" style="margin-top:8px">'+(sc?sc.us+' – '+sc.them:'–')+'</div>';
+  h+='<div style="font-weight:700;color:var(--mut)">'+names.map(esc).join(', ')+'</div></div>';
+  if(rows.length){
+    h+='<div class="sumwrap"><table class="sum"><tr><th>Player</th><th class="r">Played</th><th>Positions</th><th class="r">Max bench</th><th></th></tr>';
+    h+=rows.map(p=>{
+      const bench=playerMaxBench(g,p);
+      const played=isFinite(+p.played)?fmt(+p.played):'–';
+      const poss=positionsInGame(g,p);
+      let mark='–';
+      if(target!=null&&isFinite(+p.played)) mark=+p.played>=target?'<span class="tag ok">✓</span>':'<span class="tag b">short</span>';
+      const start=playerStarted(g,p)===true?' <span class="tag g">start</span>':'';
+      return '<tr><td>'+esc(p.name||'Player')+start+'</td><td class="r"><b>'+played+'</b></td><td>'+(poss.length?esc(poss.join(' ')):'–')+'</td><td class="r">'+(bench==null?'–':fmt(bench))+'</td><td>'+mark+'</td></tr>';
+    }).join('');
+    h+='</table></div>';
+  }
+  if(g.subs==null) h+='<div class="card">Sub log was not saved for this game.</div>';
+  else if(subs.length) h+='<div class="lbl">Substitutions</div><div class="hist">'+subs.map(s=>histLogLine(g,s)).join('')+'</div>';
+  if(!isViewer()){
+    h+='<button class="btn ghost wide" data-a="histdate" data-id="'+esc(g.id||'')+'">Change date</button>';
+    h+='<div class="row"><button class="btn sm ghost" style="color:var(--bad)" data-a="delhist" data-id="'+esc(g.id||'')+'">Delete this game</button></div>';
+  }
+  h+='<button class="btn ghost wide" data-a="history">Back</button><button class="btn ghost wide" data-a="close">Close</button>';
+  openSheet(h);
+}
+function sheetHistory(){
+  openSheet('<h2>Season</h2>'+seasonBody()+'<button class="btn ghost wide" data-a="close">Close</button>');
 }
 function sheetConfirm(text,action,label){ openSheet('<h2>'+esc(text)+'</h2><button class="btn bad big wide" data-a="'+esc(action)+'" data-confirmed="1">'+esc(label)+'</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
 
 /* ====================== EVENTS ====================== */
-const VIEWER_OK=new Set(['chatdel','forcepull','team','teamjoin','teamcreate','teamback','teamjoingo','teamcreatego','teamleave','close','goalsheet','showlog','history','chatquick','chatname','chatnamesave','synctest','gotoqueues','guide','setrole','role','resume','tog']);
+const VIEWER_OK=new Set(['chatdel','forcepull','team','teamjoin','teamcreate','teamback','teamjoingo','teamcreatego','teamleave','close','goalsheet','showlog','history','histgame','chatquick','chatname','chatnamesave','synctest','gotoqueues','guide','setrole','role','resume','tog']);
 async function act(a,d,el){
   if(isViewer()&&!VIEWER_OK.has(a)) return;
   if(isViewer()&&a==='tog'&&d.k!=='autoUpdate') return;
@@ -1098,43 +1360,45 @@ async function act(a,d,el){
     case 'tog': S.settings[d.k]=!S.settings[d.k]; break;
     case 'num': { const inp=$('#set_'+d.k); const v=Math.min(+inp.max,Math.max(+inp.min,(+inp.value||0)+(+d.d))); S.settings[d.k]=v; if(/^stint(Yellow|Orange|Red)$/.test(d.k||'')) clampStint(S.settings,d.k); break; }
     case 'history': sheetHistory(); return;
+    case 'histgame': sheetGameFinal(d); return;
     case 'showlog': openSheet('<h2>Subs this game</h2>'+(G.subs.length?'<div class="hist">'+G.subs.slice().reverse().map(logLine).join('')+'</div>':'<div class="card">No subs yet.</div>')+'<button class="btn ghost wide" data-a="close">Close</button>'); return;
-    case 'histdate': { const g=S.history[+d.i]; if(!g) return; if(!g.id) g.id='g'+Date.now()+Math.random().toString(36).slice(2,6); openSheet('<h2>Game date</h2><input id="hd" type="date" value="'+new Date(g.date).toISOString().slice(0,10)+'" style="font-size:20px;font-weight:900"><div id="hd_err" class="warn" hidden></div><button class="btn act big wide" data-a="histdatesave" data-id="'+esc(g.id)+'">Save</button><button class="btn ghost wide" data-a="history">Back</button>'); return; }
+    case 'histdate': { const g=histBy(d); if(!g) return; if(!g.id) g.id='g'+Date.now()+Math.random().toString(36).slice(2,6); openSheet('<h2>Game date</h2><input id="hd" type="date" value="'+new Date(g.date).toISOString().slice(0,10)+'" style="font-size:20px;font-weight:900"><div id="hd_err" class="warn" hidden></div><button class="btn act big wide" data-a="histdatesave" data-id="'+esc(g.id)+'">Save</button><button class="btn ghost wide" data-a="histgame" data-id="'+esc(g.id)+'">Back</button>'); return; }
     case 'histdatesave': {
-      const g=(d.id&&S.history.find(x=>x.id===d.id))||S.history[+d.i]; const v=$('#hd')&&$('#hd').value;
+      const g=histBy(d); const v=$('#hd')&&$('#hd').value;
       if(!(g&&v)){ sheetHistory(); return; }
       const old=new Date(g.date); const nd=new Date(v+'T12:00:00');
       g.date=new Date(nd.getFullYear(),nd.getMonth(),nd.getDate(),old.getHours()||12,old.getMinutes()||0).toISOString();
       g.updatedAt=Date.now(); g.synced=false;
-      S.history.sort((a,b)=>new Date(b.date)-new Date(a.date)); save(true);
+      S.history.sort((a,b)=>histTime(b)-histTime(a)); save(true); render();
       const res=await pushHistory(g);
       if(!res.ok){
         const err=$('#hd_err');
         if(err){ err.hidden=false; err.textContent=res.reason||'Could not save this game to the team server.'; }
-        else openSheet('<h2>Game date</h2><div class="warn">'+esc(res.reason||'Could not save this game to the team server.')+'</div><button class="btn act big wide" data-a="histdatesave" data-id="'+esc(g.id)+'">Try again</button><button class="btn ghost wide" data-a="history">Back</button>');
+        else openSheet('<h2>Game date</h2><div class="warn">'+esc(res.reason||'Could not save this game to the team server.')+'</div><button class="btn act big wide" data-a="histdatesave" data-id="'+esc(g.id)+'">Try again</button><button class="btn ghost wide" data-a="histgame" data-id="'+esc(g.id)+'">Back</button>');
         return;
       }
-      sheetHistory(); return;
+      sheetGameFinal({id:g.id}); return;
     }
     case 'delhist': {
       if(isViewer()) return;
-      const i=+d.i; const g=S.history[i]; if(!g) return;
+      const found=d.id?S.history.findIndex(x=>x&&x.id===d.id):-1;
+      const i=found>=0?found:+d.i; const g=S.history[i]; if(!g||!(i>=0)) return;
       S.history.splice(i,1); save(true);
       if(g.id&&S.syncUrl&&CODE()&&isFirebase()){
         try{
           const rr=await fbFetch(S.syncUrl.replace(/\/+$/,'')+teamPath()+'/games/'+encodeURIComponent(g.id)+'.json',{method:'DELETE'});
           if(!rr.ok){
-            S.history.splice(Math.min(i,S.history.length),0,g); save(true);
-            openSheet('<h2>Game history</h2><div class="warn">'+(rr.status===401||rr.status===403?'Not allowed to delete this game.':'Could not reach the team server ('+rr.status+'). The game is still in history.')+'</div><button class="btn ghost wide" data-a="history">Back</button>');
+            S.history.splice(Math.min(i,S.history.length),0,g); save(true); render();
+            openSheet('<h2>Season</h2><div class="warn">'+(rr.status===401||rr.status===403?'Not allowed to delete this game.':'Could not reach the team server ('+rr.status+'). The game is still in history.')+'</div><button class="btn ghost wide" data-a="history">Back</button>');
             return;
           }
         }catch(e){
-          S.history.splice(Math.min(i,S.history.length),0,g); save(true);
-          openSheet('<h2>Game history</h2><div class="warn">Could not reach the team server. Check your signal. The game is still in history.</div><button class="btn ghost wide" data-a="history">Back</button>');
+          S.history.splice(Math.min(i,S.history.length),0,g); save(true); render();
+          openSheet('<h2>Season</h2><div class="warn">Could not reach the team server. Check your signal. The game is still in history.</div><button class="btn ghost wide" data-a="history">Back</button>');
           return;
         }
       }
-      sheetHistory(); return;
+      render(); sheetHistory(); return;
     }
     case 'resetroster': sheetConfirm('Reset roster to placeholder players? Season starts on this phone are lost.','doresetroster','Reset roster'); return;
     case 'doresetroster': S.roster=defaultRoster(); S.queues=defaultQueues(); writeGroupMap({}); captureGroups(S.roster); closeSheet(); break;
@@ -1425,6 +1689,7 @@ if('wakeLock' in navigator){ const wl=()=>navigator.wakeLock.request('screen').c
 render();
 if(!S.team){ sheetTeam(true); } else if(!S.role){ sheetRole(true); } else if(!S.seenGuide){ S.seenGuide=true; save(true); guide(); }
 </script>
+
 
 <script>
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').then(r=>{ r.update(); }).catch(()=>{}); }
