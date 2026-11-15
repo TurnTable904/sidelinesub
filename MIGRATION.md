@@ -2,37 +2,31 @@
 
 The app change and the database rules are separate steps. The live team keeps working on today's open rules until you publish the new rules. Publish the rules last. This environment cannot sign in to your Firebase project, so it cannot enable Anonymous auth or deploy the rules for you.
 
+Build 38, 39, and 40 already sign in and already follow `database.rules.json`. Do not publish those rules until the coach phone is on one of those builds and has finished steps 4 and 5. Until you publish, those phones keep syncing on the open database, including in the middle of the season. After you publish, those same builds keep working. An older app that does not send a sign-in token cannot write after that.
+
 Do the steps in order, in one sitting, and not during a game.
 
 ## 1. Ship the new website first
 
 Merge the pull request. Do not change Firebase rules yet.
 
-Wait until https://turntable904.github.io/sidelinesub/ is the new copy. View source and look for `BB_BUILD=35`, or open the app and check Settings for Version 35. GitHub Pages can serve the previous file for about 10 minutes.
+Wait until https://turntable904.github.io/sidelinesub/ is the new copy. View source and look for `BB_BUILD=40`, or open the app and check Settings for Version 40. GitHub Pages can serve the previous file for about 10 minutes.
 
-Until step 8, the database is still open. The new page talks to it the same way as before when no web API key is set, so the current team still syncs, including the old Android app.
+Until step 8, the database is still open. Build 38 and 39 keep syncing on it. Do not publish rules during a game.
 
 ## 2. Turn on Anonymous sign-in
 
 Firebase console → the project that owns `bridge-blue-default-rtdb` → Build → Authentication → Sign-in method → Anonymous → Enable → Save.
 
-## 3. Put the web API key in the app
+## 3. Confirm the web API key is already in the live app
 
-Project settings (gear) → General → Your apps → Add app → Web (`</>`).
+The public web API key is already in the app source. It is a client id, not a password. Do not copy it into chat, email, or a pull request.
 
-You do not need Hosting. Copy `apiKey` from the config it shows. Confirm `databaseURL` is `https://bridge-blue-default-rtdb.firebaseio.com`. If the project id is not `bridge-blue`, remember that for step 8.
+Project settings (gear) → General → Your apps. Confirm `databaseURL` is `https://bridge-blue-default-rtdb.firebaseio.com`. If the project id is not `bridge-blue`, remember that for step 8.
 
-Edit this line in `index.html`:
-
-```js
-const FIREBASE_API_KEY='';
-```
-
-Paste the key between the quotes. The key is a public client id, not a password. Commit and push.
+Wait until the live site source still shows that key and shows `BB_BUILD=40`.
 
 Do not put a coach PIN, a PIN hash, or a sign-in id in git.
-
-Wait until the live site source shows that key and still shows `BB_BUILD=35`.
 
 ## 4. Sign in on the coach phone
 
@@ -74,7 +68,11 @@ Reload the site. The lineup should still load and the header should sync. Leave 
 
 ## 8. Publish the rules
 
-This is the step that locks the database. After it, a request with no sign-in cannot read or write a team, nobody can list `/teams`, and only coach sign-in ids can write the lineup, roster, score, and game history. `/app` cannot be read or written.
+Do this only after step 7 succeeds. This is the step that locks the database. Nobody should publish these rules from a pull request or from the agent that wrote them.
+
+After it, a request with no sign-in cannot read or write a team, and nobody can list `/teams`. A parent signed in anonymously can read that team and post their own chat. Only a sign-in id listed under `teams/<team code>/coaches` can write the lineup, roster, score, and game history. A phone becomes a coach by proving the PIN: it writes a claim whose hash matches the stored PIN hash, then sets its own `coaches/<sign-in id>` entry. Parents do not need the PIN. `/app` cannot be read or written.
+
+Build 38 and 39 already do those writes. Publishing does not require them to update again.
 
 Either:
 
@@ -101,7 +99,15 @@ The team code is still what parents type to read that team. It is no longer a wa
 
 ## 10. Android copies
 
-The old APK does not send a sign-in token and it cannot install this version by itself. After step 8 it will stop syncing. Use the website, or build a new APK from this `index.html` and give people that file. There is no in-app HTML update anymore.
+An APK from before build 38 does not send a sign-in token. After step 8 it will stop syncing. Build 38 and 39 APKs keep syncing. Use the website, or build a new APK and give people that file. There is no in-app HTML update anymore.
+
+Sub reminders on a locked phone need the build 40 APK, because the website cannot post an Android notification by itself. From `apk-project/`, with the signing keystore only in the environment:
+
+```bash
+./build.sh 40 2.20
+```
+
+The page calls `window.SidelineAndroid.notify(title, body)`, `vibrate(ms)`, `startGameService(dueAtMs, leadMs)`, and `stopGameService()`. `dueAtMs` is an absolute timestamp. The service waits until that time. It does not tick the game clock.
 
 ## If you publish the rules too early
 

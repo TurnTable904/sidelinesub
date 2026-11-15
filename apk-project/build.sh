@@ -39,7 +39,7 @@ sed -E "s/versionCode=\"[0-9]+\" android:versionName=\"[^\"]+\"/versionCode=\"$B
 "$BT/aapt2" compile --dir res -o out/res.zip
 "$BT/aapt2" link -o out/base.apk -I "$PLAT" --manifest out/AndroidManifest.xml -A out/assets --java out/gen out/res.zip
 sed "s/__BUILD__/$B/" src/MainActivity.java.tpl > out/MainActivity.java
-javac --release 8 -cp "$PLAT" -d out/classes out/gen/com/sidelinesub/team/R.java out/MainActivity.java src/NativeBridge.java
+javac --release 8 -cp "$PLAT" -d out/classes out/gen/com/sidelinesub/team/R.java out/MainActivity.java src/NativeBridge.java src/SubAlertService.java
 "$BT/d8" --release --min-api 24 --lib "$PLAT" --output out out/classes/com/sidelinesub/team/*.class
 cp out/base.apk out/unsigned.apk
 (cd out && zip -q unsigned.apk classes.dex)
