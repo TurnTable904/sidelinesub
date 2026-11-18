@@ -10,7 +10,7 @@ Do the steps in order, in one sitting, and not during a game.
 
 Merge the pull request. Do not change Firebase rules yet.
 
-Wait until https://turntable904.github.io/sidelinesub/ is the new copy. View source and look for `BB_BUILD=40`, or open the app and check Settings for Version 40. GitHub Pages can serve the previous file for about 10 minutes.
+Wait until https://www.sidelinesub.com/ is the new copy. View source and look for `BB_BUILD=40`, or open the app and check Settings for Version 40. GitHub Pages can serve the previous file for about 10 minutes. The old project URL redirects here.
 
 Until step 8, the database is still open. Build 38 and 39 keep syncing on it. Do not publish rules during a game.
 
