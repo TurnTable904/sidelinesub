@@ -19,6 +19,14 @@ The shared roster, lineup, score, chat, and saved games live in Firebase and com
 
 GitHub's redirect runs before the page script, so a bookmark on the old project address cannot hand that `localStorage` to the new domain. The page does hand it over when the script actually runs on the old host (HTTP www, or the bare domain if it serves this file). It copies `sidelinesub.v1`, `sidelinesub.auth.v1`, `sidelinesub.groups.*`, and `ss.hint` only when https://www.sidelinesub.com/ does not already have a saved team.
 
+## Photos
+
+Photo files belong in Firebase Storage (`bridge-blue.firebasestorage.app`). The database stores only the caption, the uploader, and whether a coach has approved it. Originals are not kept.
+
+`storage.rules` and the photo paths in `database.rules.json` are in the repo and are not deployed from here. Storage rules cannot read the Realtime Database, so `syncCoachClaim` copies `teams/<code>/coaches/<sign-in id>` into that phone's sign-in token after the existing PIN check. Parents do not get that claim. Pending photos stay outside the team record so the team-wide read rule cannot show them.
+
+Before photos work on the live site: switch the Firebase project to the Blaze plan and set a budget alert, create the Storage bucket in `us-central1` (or `us-east1`), apply `storage.cors.json`, and deploy `storage`, `functions:syncCoachClaim`, and the database rules only when you also want the rest of `database.rules.json` live. See the photo pull request for the exact commands.
+
 ## Android APK
 
 `app-fragment.html` is the app. `index.html` is that fragment wrapped for GitHub Pages, including `window.BB_BUILD`.

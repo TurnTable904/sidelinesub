@@ -3,3 +3,9 @@ apk-project/*.jks
 apk-project/*.keystore
 apk-project/out/
 apk-project/*.apk
+functions/node_modules/
+.firebase/
+firebase-debug.log
+database-debug.log
+ui-debug.log
+*-debug.log
