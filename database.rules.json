@@ -42,6 +42,13 @@
           }
         },
 
+        "photos": {
+          "$id": {
+            ".write": "auth != null && $id.matches(/^[A-Za-z0-9]+$/) && ((root.child('teams').child($code).child('coaches').child(auth.uid).val() === true && (!newData.exists() || !data.exists() || data.child('uid').val() === newData.child('uid').val())) || (data.exists() && !newData.exists() && data.child('uid').val() === auth.uid))",
+            ".validate": "!newData.exists() || (newData.child('uid').isString() && newData.child('uid').val().length > 0 && newData.child('uid').val().length <= 128 && newData.child('role').val().matches(/^(coach|viewer)$/) && newData.child('status').val() === 'approved' && newData.child('event').isString() && newData.child('event').val().length > 0 && newData.child('event').val().length <= 60 && newData.child('caption').isString() && newData.child('caption').val().length <= 140 && newData.child('path').isString() && newData.child('path').val() === 'photos/'+$code+'/'+$id+'.jpg' && newData.child('thumb').isString() && newData.child('thumb').val() === 'photos/'+$code+'/'+$id+'_t.jpg' && newData.child('created').isNumber() && newData.child('created').val() > 0 && newData.child('created').val() <= now + 86400000 && newData.child('name').isString() && newData.child('name').val().length <= 40 && !newData.hasChild('image') && !newData.hasChild('bytes'))"
+          }
+        },
+
         "coaches": {
           "$uid": {
             ".write": "auth != null && auth.uid === $uid && newData.val() === true && (data.val() === true || root.child('teamSecrets').child($code).child('ownerUid').val() === auth.uid || (root.child('teamSecrets').child($code).child('pinHash').isString() && root.child('teamSecrets').child($code).child('claims').child($uid).child('hash').val() === root.child('teamSecrets').child($code).child('pinHash').val()))"
@@ -64,6 +71,32 @@
           "$uid": {
             ".write": "auth != null && auth.uid === $uid && (!newData.exists() || (newData.child('hash').isString() && newData.child('hash').val().matches(/^[0-9a-f]{64}$/) && newData.child('hash').val() === root.child('teamSecrets').child($code).child('pinHash').val()))"
           }
+        }
+      }
+    },
+
+    "photoPending": {
+      ".read": false,
+      ".write": false,
+      "$code": {
+        ".read": "auth != null && $code.matches(/^[A-Z0-9]{4,12}$/) && root.child('teams').child($code).child('coaches').child(auth.uid).val() === true",
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid && $code.matches(/^[A-Z0-9]{4,12}$/)",
+          "$id": {
+            ".write": "auth != null && $code.matches(/^[A-Z0-9]{4,12}$/) && $id.matches(/^[A-Za-z0-9]+$/) && ((auth.uid === $uid && !data.exists() && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('role').val() === 'viewer') || (!newData.exists() && (auth.uid === $uid || root.child('teams').child($code).child('coaches').child(auth.uid).val() === true)))",
+            ".validate": "!newData.exists() || (newData.child('uid').val() === $uid && newData.child('role').val() === 'viewer' && newData.child('status').val() === 'pending' && newData.child('event').isString() && newData.child('event').val().length > 0 && newData.child('event').val().length <= 60 && newData.child('caption').isString() && newData.child('caption').val().length <= 140 && newData.child('path').isString() && newData.child('path').val() === 'photos/'+$code+'/'+$id+'.jpg' && newData.child('thumb').isString() && newData.child('thumb').val() === 'photos/'+$code+'/'+$id+'_t.jpg' && newData.child('created').isNumber() && newData.child('created').val() > 0 && newData.child('created').val() <= now + 86400000 && newData.child('name').isString() && newData.child('name').val().length <= 40 && !newData.hasChild('image') && !newData.hasChild('bytes'))"
+          }
+        }
+      }
+    },
+
+    "photoReports": {
+      ".read": false,
+      ".write": false,
+      "$code": {
+        ".read": "auth != null && $code.matches(/^[A-Z0-9]{4,12}$/) && root.child('teams').child($code).child('coaches').child(auth.uid).val() === true",
+        "$photoId": {
+          ".write": "auth != null && $code.matches(/^[A-Z0-9]{4,12}$/) && $photoId.matches(/^[A-Za-z0-9]+$/) && ((!data.exists() && newData.child('uid').val() === auth.uid && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 200 && newData.child('t').isNumber() && newData.child('event').isString() && newData.child('event').val().length <= 60) || (!newData.exists() && root.child('teams').child($code).child('coaches').child(auth.uid).val() === true))"
         }
       }
     },

@@ -1,0 +1,15 @@
+[
+  {
+    "origin": [
+      "https://www.sidelinesub.com",
+      "https://sidelinesub.com",
+      "http://127.0.0.1:8765",
+      "http://localhost:8765",
+      "http://127.0.0.1:5000",
+      "http://localhost:5000"
+    ],
+    "method": ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization", "Content-Length", "X-Firebase-Storage-Version"],
+    "maxAgeSeconds": 3600
+  }
+]

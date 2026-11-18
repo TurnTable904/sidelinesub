@@ -1,0 +1,53 @@
+rules_version = '2';
+// Photo bytes live here. Coach vs parent is a custom claim set by syncCoachClaim,
+// because Storage rules cannot read the Realtime Database.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isCoach(code) {
+      return signedIn()
+        && 'coach' in request.auth.token
+        && request.auth.token.coach[code] == true;
+    }
+    function jpeg() {
+      return request.resource.contentType.matches('image/jpeg.*')
+        && request.resource.size < 1500 * 1024
+        && request.resource.size > 0;
+    }
+    match /photos/{code}/{file} {
+      allow get: if signedIn()
+        && code.matches('^[A-Z0-9]{4,12}$')
+        && file.matches('^[A-Za-z0-9]+(_t)?\\.jpg$')
+        && (
+          resource.metadata.status == 'approved'
+          || resource.metadata.owner == request.auth.uid
+          || isCoach(code)
+        );
+      allow create: if signedIn()
+        && code.matches('^[A-Z0-9]{4,12}$')
+        && file.matches('^[A-Za-z0-9]+(_t)?\\.jpg$')
+        && jpeg()
+        && request.resource.metadata.owner == request.auth.uid
+        && (
+          (isCoach(code)
+            && request.resource.metadata.status == 'approved'
+            && request.resource.metadata.role == 'coach')
+          || (!isCoach(code)
+            && request.resource.metadata.status == 'pending'
+            && request.resource.metadata.role == 'viewer')
+        );
+      allow update: if isCoach(code)
+        && code.matches('^[A-Z0-9]{4,12}$')
+        && request.resource.metadata.owner == resource.metadata.owner
+        && request.resource.metadata.role == resource.metadata.role
+        && request.resource.metadata.status == 'approved'
+        && request.resource.contentType == resource.contentType
+        && request.resource.size == resource.size;
+      allow delete: if signedIn()
+        && code.matches('^[A-Z0-9]{4,12}$')
+        && (isCoach(code) || resource.metadata.owner == request.auth.uid);
+    }
+  }
+}

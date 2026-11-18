@@ -3,7 +3,7 @@
    this origin. activate drops every other cache so a previous cache cannot
    keep serving a page from the old /sidelinesub/ path. */
 'use strict';
-var CACHE = 'sidelinesub-root-1';
+var CACHE = 'sidelinesub-root-2';
 var PRECACHE = ['/', '/index.html', '/manifest.json', '/icon-180.png', '/icon-192.png', '/icon-512.png'];
 
 function stripBase(url) {
@@ -32,6 +32,8 @@ self.addEventListener('activate', function (event) {
 self.addEventListener('fetch', function (event) {
   var req = event.request;
   if (req.method !== 'GET') return;
+  // Photo files live on Firebase Storage, not in this app cache. Thumbnails are kept in page memory only.
+  if (/firebasestorage\.googleapis\.com|storage\.googleapis\.com|:9199\//.test(req.url)) return;
   var url;
   try { url = stripBase(req.url); } catch (e) { return; }
   if (url.origin !== self.location.origin) return;

@@ -35,6 +35,7 @@ head = (
 )
 open(sys.argv[3], 'w').write(head + s + '</body></html>')
 PY
+cp "$ROOT/photos.js" "$APP/out/assets/photos.js"
 sed -E "s/versionCode=\"[0-9]+\" android:versionName=\"[^\"]+\"/versionCode=\"$B\" android:versionName=\"$V\"/" AndroidManifest.xml > out/AndroidManifest.xml
 "$BT/aapt2" compile --dir res -o out/res.zip
 "$BT/aapt2" link -o out/base.apk -I "$PLAT" --manifest out/AndroidManifest.xml -A out/assets --java out/gen out/res.zip
