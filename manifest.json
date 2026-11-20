@@ -1,15 +1,20 @@
 {
   "name": "Sideline Sub",
   "short_name": "Sideline Sub",
+  "description": "Youth soccer substitution app for equal playing time, lineup rotation, and a sideline sub timer.",
+  "lang": "en",
+  "dir": "ltr",
   "id": "https://www.sidelinesub.com/",
-  "start_url": "/",
+  "start_url": "/?app=1",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#0b4fc2",
+  "categories": ["sports", "utilities"],
   "icons": [
-    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
-    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+    {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }

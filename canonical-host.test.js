@@ -114,12 +114,14 @@ assert.strictEqual(stranger.getItem('stolen'), null);
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'));
 assert.strictEqual(manifest.id, 'https://www.sidelinesub.com/');
-assert.strictEqual(manifest.start_url, '/');
+assert.strictEqual(manifest.start_url, '/?app=1');
+assert.ok(manifest.start_url.startsWith('/'));
+assert.ok(!manifest.start_url.includes('/sidelinesub'));
 assert.strictEqual(manifest.scope, '/');
 assert.ok(manifest.icons.every(icon => icon.src.startsWith('/')));
 
 const sw = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
-assert.ok(sw.includes("var CACHE = 'sidelinesub-root-2'"));
+assert.ok(sw.includes("var CACHE = 'sidelinesub-root-3'"));
 assert.ok(sw.includes("'/index.html'"));
 assert.ok(sw.includes("caches.delete"));
 assert.ok(!sw.includes("'/sidelinesub/index.html'"));
