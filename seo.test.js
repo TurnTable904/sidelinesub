@@ -49,12 +49,24 @@ assert.ok(text.includes('Questions coaches and parents ask'));
 assert.ok(!text.includes('AIza'), 'API key must stay out of the public landing text');
 assert.ok(!/firebasestorage|firebaseio/i.test(visible), 'landing HTML must not point at team data');
 assert.ok(!visible.includes('turntable904.github.io'));
-assert.ok(index.includes("localStorage.getItem('sidelinesub.v1')"), 'saved teams skip the landing');
+assert.ok(index.includes("storage.getItem('sidelinesub.v1')"), 'saved teams skip the landing');
+assert.ok(index.includes('function ssSkipLanding'));
 assert.ok(index.includes('function ssEnterApp'));
-assert.ok(index.includes('data-open-app'));
+assert.ok(index.includes('href="/?app=1" data-open-app'), 'landing buttons still open the app');
+assert.ok(index.includes('class="about-link" href="/?home=1"'), 'settings links to the home override');
+assert.ok(index.includes('About Sideline Sub'));
+assert.ok(!index.includes('href="/?home=1" data-open-app'));
+const gateAt = index.indexOf('function ssSkipLanding');
+const teamSkipAt = index.indexOf("storage.getItem('sidelinesub.v1')", gateAt);
+assert.ok(gateAt > 0 && teamSkipAt > gateAt);
+assert.ok(index.indexOf("hash === '#home'") < teamSkipAt, 'home override is decided before a saved team');
+assert.ok(index.includes('rel="canonical" href="https://www.sidelinesub.com/"'));
 assert.ok(fragment.includes('<main id="view"></main>'), 'the Android app keeps the plain app shell');
 assert.ok(!fragment.includes('id="landing"'));
 assert.ok(!fragment.includes('ssEnterApp'));
+assert.ok(!fragment.includes('ssSkipLanding'));
+assert.ok(!fragment.includes('about-link'));
+assert.ok(!fragment.includes('home=1'));
 assert.ok(/noindex/i.test(missing), 'unknown URLs stay out of the index');
 
 const ld = [...index.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m => JSON.parse(m[1]));
@@ -87,6 +99,7 @@ assert.ok(robots.includes('Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 assert.ok(sitemap.includes('<loc>https://www.sidelinesub.com/</loc>'));
 assert.strictEqual((sitemap.match(/<loc>/g) || []).length, 1);
+assert.ok(!sitemap.includes('home=1'), 'the home override is not a second indexed URL');
 assert.ok(!sitemap.includes('github.io'));
 assert.ok(/<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(sitemap));
 
