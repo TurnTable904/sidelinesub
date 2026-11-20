@@ -1,0 +1,12 @@
+# Sideline Sub public site: https://www.sidelinesub.com/
+# Team rosters, chat, and photos are not files on this host.
+
+User-agent: *
+Allow: /
+
+# search: may index this site and show links and short excerpts.
+# ai-input: may quote this site in an answer that links here.
+# ai-train: may not use this site to train models.
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+
+Sitemap: https://www.sidelinesub.com/sitemap.xml

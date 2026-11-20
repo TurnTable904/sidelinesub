@@ -143,25 +143,330 @@
 });
 </script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>Sideline Sub</title>
+<title>Sideline Sub — Youth Soccer Subs &amp; Equal Playing Time</title>
 <link rel="canonical" href="https://www.sidelinesub.com/">
-<meta name="description" content="Youth soccer sideline app.">
+<link rel="alternate" hreflang="en" href="https://www.sidelinesub.com/">
+<link rel="alternate" hreflang="x-default" href="https://www.sidelinesub.com/">
+<link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+<meta name="description" content="Free youth soccer substitution app. Track equal playing time, rotate your lineup, and run a sideline sub timer from your phone. Parents can follow along.">
+<meta name="author" content="Chad Turner">
+<meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="website">
+<meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="Sideline Sub">
-<meta property="og:title" content="Sideline Sub">
-<meta property="og:description" content="Youth soccer sideline app.">
+<meta property="og:title" content="Sideline Sub — Youth Soccer Subs &amp; Equal Playing Time">
+<meta property="og:description" content="Free youth soccer substitution app. Track equal playing time, rotate your lineup, and run a sideline sub timer from your phone. Parents can follow along.">
 <meta property="og:url" content="https://www.sidelinesub.com/">
+<meta property="og:image" content="https://www.sidelinesub.com/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Sideline Sub, a youth soccer substitution app for equal playing time">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Sideline Sub — Youth Soccer Subs &amp; Equal Playing Time">
+<meta name="twitter:description" content="Free youth soccer substitution app. Track equal playing time, rotate your lineup, and run a sideline sub timer from your phone. Parents can follow along.">
+<meta name="twitter:image" content="https://www.sidelinesub.com/og.png">
+<meta name="twitter:image:alt" content="Sideline Sub, a youth soccer substitution app for equal playing time">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Sideline Sub">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b4fc2">
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon-180.png">
-<link rel="icon" href="/icon-192.png">
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}</style>
+<link rel="apple-touch-icon" href="/icon-180.png" sizes="180x180">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://www.sidelinesub.com/#website",
+      "url": "https://www.sidelinesub.com/",
+      "name": "Sideline Sub",
+      "description": "Free youth soccer substitution app. Track equal playing time, rotate your lineup, and run a sideline sub timer from your phone. Parents can follow along.",
+      "inLanguage": "en",
+      "publisher": { "@id": "https://www.sidelinesub.com/#organization" }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://www.sidelinesub.com/#organization",
+      "name": "Sideline Sub",
+      "url": "https://www.sidelinesub.com/",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.sidelinesub.com/icon-512.png",
+        "width": 512,
+        "height": 512
+      },
+      "founder": { "@type": "Person", "name": "Chad Turner" }
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://www.sidelinesub.com/#app",
+      "name": "Sideline Sub",
+      "url": "https://www.sidelinesub.com/",
+      "applicationCategory": "SportsApplication",
+      "operatingSystem": "Web, Android",
+      "browserRequirements": "Requires JavaScript. Works in a phone or desktop browser.",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "description": "Free youth soccer substitution app for equal playing time, lineup rotation, and a sideline sub timer.",
+      "image": "https://www.sidelinesub.com/og.png",
+      "featureList": [
+        "Equal playing time tracker",
+        "Soccer lineup rotation for 5v5, 7v7, 9v9, and 11v11",
+        "Sideline sub timer with sound and vibration",
+        "Shared view for parents",
+        "Team photos that stay inside the team"
+      ],
+      "author": { "@id": "https://www.sidelinesub.com/#organization" },
+      "publisher": { "@id": "https://www.sidelinesub.com/#organization" }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://www.sidelinesub.com/#faq",
+      "url": "https://www.sidelinesub.com/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Sideline Sub?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sideline Sub is a free youth soccer substitution app for coaches and parents. The coach runs the lineup, the game clock, and subs from a phone on the sideline. Everyone else follows the same game with a team code."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it track equal playing time?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. It records minutes for each player, marks a player who has been on the field a long time, and suggests the next substitution so playing time stays closer to even."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is there a sub timer for coaches?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. You choose how often to check substitutions. Sideline Sub counts down on the game clock, then tells you who should come off and who should go in. It can beep and vibrate when a sub is due."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can it rotate a soccer lineup?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Formations are built in for 5v5, 7v7, 9v9, and 11v11. Suggest a starting lineup, tap a player to swap, and undo if you tapped the wrong name."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can parents follow without changing the game?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. A parent joins as a viewer with the team code and does not need the coach PIN. Viewers see the lineup, the score, minutes, and team chat. Only a coach can change the lineup or the clock."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Are team photos public?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Photos stay inside the team. They are not shown on this page. A coach approves a parent photo before the rest of the team can see it, and search engines are not given those files."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What player information should I enter?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "First names and jersey numbers. The live game is shared only with people who have the team code. Do not add last names, birthdays, school, or contact details."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it cost money or need an app store download?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The website is free and works in a phone browser. Add it to your home screen for a full-screen view in sunlight. Coaches can also use the Android app."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "I used an older Sideline Sub address. Where is the app now?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Open https://www.sidelinesub.com/. The previous GitHub Pages address forwards here. Stay on this address so the team saved on this phone keeps working."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+img{max-width:100%;height:auto}
+[hidden]{display:none!important}
+html.app-on #landing{display:none!important}
+html:not(.app-on) #app,
+html:not(.app-on) #sheetbg,
+html:not(.app-on) #resume,
+html:not(.app-on) .resume{display:none!important}
+html:not(.app-on),
+html:not(.app-on) body{height:auto;min-height:100%;overflow:visible;overscroll-behavior:auto}
+#landing{background:#fff;color:#0e1711;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45;min-height:100%;overflow-wrap:break-word}
+#landing a{color:#0b4fc2}
+#landing a:focus-visible{outline:3px solid #0b4fc2;outline-offset:3px}
+.land-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));border-bottom:2px solid #d5ddd6;position:sticky;top:0;background:#fff;z-index:2}
+.land-brand{display:flex;align-items:center;gap:10px;font-weight:900;color:#0e1711;text-decoration:none;font-size:18px}
+.land-brand img{width:40px;height:40px;border-radius:10px;flex:none}
+.land-wrap{max-width:760px;margin:0 auto;padding:28px 16px 56px}
+#landing h1,#landing h2,#landing h3{scroll-margin-top:96px}
+#landing h1{font-size:clamp(32px,6vw,46px);line-height:1.12;letter-spacing:-.02em;font-weight:900;margin:0 0 12px}
+#landing h2{font-size:clamp(24px,4vw,30px);line-height:1.2;font-weight:900;margin:36px 0 10px}
+#landing h3{font-size:18px;line-height:1.3;font-weight:900;margin:0 0 6px}
+#landing p,#landing li{font-size:17px}
+#landing p{margin:0 0 12px}
+.land-lead{font-size:1.2rem;margin:0 0 8px}
+.land-actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 8px}
+a.land-btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:12px 18px;border-radius:12px;background:#0b4fc2;color:#fff!important;font-weight:900;text-decoration:none;font-size:17px;text-align:center}
+a.land-btn.secondary{background:#fff;color:#0b4fc2!important;box-shadow:inset 0 0 0 2px #0b4fc2}
+.land-note{font-size:14px;color:#3d4f44;margin-top:8px}
+.land-grid{display:grid;grid-template-columns:1fr;gap:12px;margin:16px 0 0}
+.land-card{background:#f1f5f1;border-radius:14px;padding:14px 16px}
+.land-card p{margin:0}
+#landing ol{margin:0;padding-left:1.25rem}
+#landing li{margin:0 0 8px}
+#landing footer{border-top:2px solid #d5ddd6;padding:20px 16px calc(20px + env(safe-area-inset-bottom));color:#3d4f44;font-size:15px}
+#landing footer p{font-size:15px;margin:0 0 6px}
+@media (max-width:640px){
+  .land-actions{flex-direction:column;align-items:stretch}
+  .land-actions a.land-btn{width:100%}
+}
+@media (min-width:720px){.land-grid{grid-template-columns:1fr 1fr 1fr}}
+#landing #faq ~ section{margin-top:16px}
+</style>
+<script>
+/* Returning coaches skip the public page and open the lineup.
+   A first visit, including a search-engine fetch with no saved team, sees the landing. */
+(function () {
+  var skip = false;
+  try {
+    var search = location.search || '';
+    if (/(^|[?&])app=1(&|$)/.test(search)) skip = true;
+    else if (location.hash === '#app') skip = true;
+    else if (location.protocol === 'file:') skip = true;
+    else if (window.matchMedia && matchMedia('(display-mode: standalone)').matches) skip = true;
+    else if (navigator.standalone === true) skip = true;
+    else if (sessionStorage.getItem('ss.app') === '1') skip = true;
+    else if (localStorage.getItem('sidelinesub.v1')) skip = true;
+  } catch (e) {
+    skip = true;
+  }
+  if (skip) document.documentElement.classList.add('app-on');
+})();
+</script>
 <script>window.BB_BUILD=40;</script>
 </head><body>
+
+<div id="landing">
+  <header class="land-bar">
+    <a class="land-brand" href="https://www.sidelinesub.com/">
+      <img src="/icon-192.png" width="40" height="40" alt="">
+      Sideline Sub
+    </a>
+    <a class="land-btn" href="/?app=1" data-open-app>Open the app</a>
+  </header>
+  <main class="land-wrap">
+    <h1>Youth soccer substitution app for equal playing time</h1>
+    <p class="land-lead">Sideline Sub is a free sideline tool for youth soccer coaches. It suggests the next sub, tracks minutes so playing time stays fair, and runs a sub timer you can hear from the bench. Parents open the same page and follow the lineup without changing it.</p>
+    <div class="land-actions">
+      <a class="land-btn" id="open-app" href="/?app=1" data-open-app>Start using Sideline Sub</a>
+      <a class="land-btn secondary" href="#how">See how it works</a>
+    </div>
+    <p class="land-note">Works in a phone browser. JavaScript is required to open the lineup, the clock, and the roster. This page explains the app either way.</p>
+    <noscript><p class="land-note">JavaScript is off, so the lineup cannot open in this browser. The guide below is still here.</p></noscript>
+
+    <h2>Built for the sideline</h2>
+    <div class="land-grid">
+      <section class="land-card">
+        <h3>Equal playing time tracker</h3>
+        <p>See each player’s minutes and how long the current stint has lasted. The field marks a player who has stayed in a long time, and the next suggestion brings on someone who has waited.</p>
+      </section>
+      <section class="land-card">
+        <h3>Soccer lineup rotation</h3>
+        <p>Set up 5v5, 7v7, 9v9, or 11v11. Tap Suggest lineup before kickoff, then tap any player to swap. Undo is there if you tap the wrong name.</p>
+      </section>
+      <section class="land-card">
+        <h3>Sub timer for coaches</h3>
+        <p>Pick how often you want to check subs. The clock counts down, then one substitution is ready: who comes off, who goes in, and at which position. A beep and a vibration fire when it is time.</p>
+      </section>
+    </div>
+
+    <h2 id="how">How a game works</h2>
+    <ol>
+      <li>Before kickoff, mark who is here, suggest a lineup, and tap Kickoff.</li>
+      <li>At kickoff, start the clock. If you forget, tap the time and type what the referee has.</li>
+      <li>During the game, make the substitution the orange box shows.</li>
+      <li>Tap a field player to take them out, or a bench player to put them in.</li>
+    </ol>
+
+    <h2>Coaches run it. Parents follow it.</h2>
+    <p>A coach creates a team code and a PIN. Parents and assistants join with the code. The coach’s phone keeps the clock, the score, and the subs. A viewer phone shows the same lineup, minutes, and chat, and cannot change them.</p>
+    <p>Use first names and jersey numbers. The live game is shared only with people who have the team code. Do not add last names, birthdays, school, or contact details.</p>
+    <p>Team photos stay inside that team. They are not on this public page. A coach approves a parent photo before the rest of the team can see it.</p>
+
+    <h2 id="faq">Questions coaches and parents ask</h2>
+    <section>
+      <h3>What is Sideline Sub?</h3>
+      <p>Sideline Sub is a free youth soccer substitution app for coaches and parents. The coach runs the lineup, the game clock, and subs from a phone on the sideline. Everyone else follows the same game with a team code.</p>
+    </section>
+    <section>
+      <h3>Does it track equal playing time?</h3>
+      <p>Yes. It records minutes for each player, marks a player who has been on the field a long time, and suggests the next substitution so playing time stays closer to even.</p>
+    </section>
+    <section>
+      <h3>Is there a sub timer for coaches?</h3>
+      <p>Yes. You choose how often to check substitutions. Sideline Sub counts down on the game clock, then tells you who should come off and who should go in. It can beep and vibrate when a sub is due.</p>
+    </section>
+    <section>
+      <h3>Can it rotate a soccer lineup?</h3>
+      <p>Yes. Formations are built in for 5v5, 7v7, 9v9, and 11v11. Suggest a starting lineup, tap a player to swap, and undo if you tapped the wrong name.</p>
+    </section>
+    <section>
+      <h3>Can parents follow without changing the game?</h3>
+      <p>Yes. A parent joins as a viewer with the team code and does not need the coach PIN. Viewers see the lineup, the score, minutes, and team chat. Only a coach can change the lineup or the clock.</p>
+    </section>
+    <section>
+      <h3>Are team photos public?</h3>
+      <p>No. Photos stay inside the team. They are not shown on this page. A coach approves a parent photo before the rest of the team can see it, and search engines are not given those files.</p>
+    </section>
+    <section>
+      <h3>What player information should I enter?</h3>
+      <p>First names and jersey numbers. The live game is shared only with people who have the team code. Do not add last names, birthdays, school, or contact details.</p>
+    </section>
+    <section>
+      <h3>Does it cost money or need an app store download?</h3>
+      <p>The website is free and works in a phone browser. Add it to your home screen for a full-screen view in sunlight. Coaches can also use the Android app.</p>
+    </section>
+    <section>
+      <h3>I used an older Sideline Sub address. Where is the app now?</h3>
+      <p>Open https://www.sidelinesub.com/. The previous GitHub Pages address forwards here. Stay on this address so the team saved on this phone keeps working.</p>
+    </section>
+
+    <div class="land-actions">
+      <a class="land-btn" href="/?app=1" data-open-app>Open the app</a>
+    </div>
+  </main>
+  <footer>
+    <p>Sideline Sub is a free youth soccer app by Chad Turner.</p>
+    <p><a href="https://www.sidelinesub.com/">https://www.sidelinesub.com/</a></p>
+  </footer>
+</div>
 
 <style>
 /* Layout: one-screen phone app. Sticky clock header, scrolling game view, fixed bottom nav. Light-first for sunlight. */
@@ -378,7 +683,7 @@ button.gcard:active{background:var(--card2)}
 
 <div id="app">
   <header id="hdr"></header>
-  <main id="view"></main>
+  <div id="view"></div>
   <nav id="nav">
     <button data-tab="game"><span class="ic">⚽</span>Game</button>
     <button data-tab="roster"><span class="ic">👥</span>Roster</button>
@@ -1910,8 +2215,23 @@ function syncNativeAlerts(){
   try{ n.startGameService(dueAt, w.lead*1000); }catch(e){}
 }
 document.addEventListener('pointerdown',()=>{ if(beepCtx&&beepCtx.state==='suspended') beepCtx.resume(); });
-render();
-if(!S.team){ sheetTeam(true); } else if(!S.role){ sheetRole(true); } else if(!S.seenGuide){ S.seenGuide=true; save(true); guide(); }
+function ssEnterApp(){
+  document.documentElement.classList.add('app-on');
+  var landing=document.getElementById('landing');
+  if(landing) landing.hidden=true;
+  try{ sessionStorage.setItem('ss.app','1'); }catch(e){}
+  render();
+  if(!S.team){ sheetTeam(true); }
+  else if(!S.role){ sheetRole(true); }
+  else if(!S.seenGuide){ S.seenGuide=true; save(true); guide(); }
+}
+if(document.documentElement.classList.contains('app-on')) ssEnterApp();
+else {
+  render();
+  document.querySelectorAll('[data-open-app]').forEach(function(el){
+    el.addEventListener('click', function(ev){ ev.preventDefault(); ssEnterApp(); });
+  });
+}
 </script>
 
 
@@ -1926,7 +2246,7 @@ if(!S.team){ sheetTeam(true); } else if(!S.role){ sheetRole(true); } else if(!S.
 })();
 // web version: if not installed to the home screen on iOS, show a one-time hint
 (function(){ try{ const ios=/iphone|ipad|ipod/i.test(navigator.userAgent); const standalone=window.navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
-  if(ios&&!standalone&&!localStorage.getItem('ss.hint')){ const d=document.createElement('div'); d.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:50;background:#0b4fc2;color:#fff;border-radius:14px;padding:14px 16px;font:800 15px system-ui;box-shadow:0 6px 20px rgba(0,0,0,.4)';
+  if(document.documentElement.classList.contains('app-on')&&ios&&!standalone&&!localStorage.getItem('ss.hint')){ const d=document.createElement('div'); d.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:50;background:#0b4fc2;color:#fff;border-radius:14px;padding:14px 16px;font:800 15px system-ui;box-shadow:0 6px 20px rgba(0,0,0,.4)';
     d.innerHTML='Add Sideline Sub to your Home Screen for full screen and offline use: tap the Share button, then <b>Add to Home Screen</b>. <button style="float:right;background:#fff;color:#0b4fc2;border:0;border-radius:8px;padding:6px 10px;font-weight:900">OK</button>';
     d.querySelector('button').onclick=()=>{ d.remove(); try{localStorage.setItem('ss.hint','1');}catch(e){} }; document.body.appendChild(d); } }catch(e){} })();
 </script></body></html>
