@@ -352,21 +352,34 @@ a.land-btn.secondary{background:#fff;color:#0b4fc2!important;box-shadow:inset 0 
 </style>
 <script>
 /* Returning coaches skip the public page and open the lineup.
-   A first visit, including a search-engine fetch with no saved team, sees the landing. */
-(function () {
-  var skip = false;
+   A first visit, including a search-engine fetch with no saved team, sees the landing.
+   ?home=1 and #home always show this page, including a saved team and an installed app.
+   The canonical URL stays https://www.sidelinesub.com/ either way. */
+function ssSkipLanding(loc, storage, session, nav, matchMedia) {
+  loc = loc || {};
+  var search = loc.search || '';
+  var hash = loc.hash || '';
+  if (/(^|[?&])home=1(&|$)/.test(search) || hash === '#home') return false;
   try {
-    var search = location.search || '';
-    if (/(^|[?&])app=1(&|$)/.test(search)) skip = true;
-    else if (location.hash === '#app') skip = true;
-    else if (location.protocol === 'file:') skip = true;
-    else if (window.matchMedia && matchMedia('(display-mode: standalone)').matches) skip = true;
-    else if (navigator.standalone === true) skip = true;
-    else if (sessionStorage.getItem('ss.app') === '1') skip = true;
-    else if (localStorage.getItem('sidelinesub.v1')) skip = true;
+    if (/(^|[?&])app=1(&|$)/.test(search)) return true;
+    if (hash === '#app') return true;
+    if (loc.protocol === 'file:') return true;
+    if (matchMedia && matchMedia('(display-mode: standalone)').matches) return true;
+    if (nav && nav.standalone === true) return true;
+    if (session && session.getItem('ss.app') === '1') return true;
+    if (storage && storage.getItem('sidelinesub.v1')) return true;
   } catch (e) {
-    skip = true;
+    return true;
   }
+  return false;
+}
+(function () {
+  var skip = true;
+  try {
+    skip = ssSkipLanding(location, localStorage, sessionStorage, navigator, function (q) {
+      return window.matchMedia ? window.matchMedia(q) : { matches: false };
+    });
+  } catch (e) {}
   if (skip) document.documentElement.classList.add('app-on');
 })();
 </script>
@@ -679,6 +692,8 @@ button.gcard:active{background:var(--card2)}
 .ro .rp button{pointer-events:none}
 .viewerpill{display:inline-block;background:var(--card2);color:var(--mut);font-size:11px;font-weight:900;letter-spacing:.1em;padding:3px 8px;border-radius:6px}
 .testpill{display:inline-block;background:var(--test);color:#fff;font-size:11px;font-weight:900;letter-spacing:.1em;padding:3px 8px;border-radius:6px}
+a.about-link{display:flex;align-items:center;width:fit-content;min-height:48px;margin:0 0 8px;color:var(--act);font-weight:800;font-size:16px;text-decoration:underline;text-underline-offset:3px}
+a.about-link:focus-visible{outline:3px solid var(--act);outline-offset:3px}
 </style>
 
 <div id="app">
@@ -1450,8 +1465,12 @@ function viewMinutes(){
   return '<div class="row"><button class="btn act grow" data-a="history">Season</button></div><div class="card" style="font-weight:700">'+fmt(Math.max(0,gameSecs()-c))+' left · target '+S.settings.minTarget+':00 · projection assumes a fair share of the remaining time</div><table><tr><th>Player</th><th class="r">Played</th><th class="r">Now</th><th class="r">Proj.</th><th></th></tr>'+rows.map(r=>{const on=ps(r.p.id).onField;return '<tr><td><b>'+esc(r.p.name)+'</b><br><small style="color:var(--mut)">'+(on?posOf(r.p.id)+' · on '+fmt(fieldStint(r.p.id,c)):'bench · '+fmt(benchStint(r.p.id,c)))+'</small></td><td class="r"><b>'+fmt(r.pl)+'</b></td><td class="r">'+(on?'<span class="in">▲</span>':'<span class="outc">▼</span>')+'</td><td class="r">'+fmt(r.s.projected)+'</td><td>'+tag(r.s)+'</td></tr>';}).join('')+'</table>';
 }
 
+function aboutLink(){
+  if(!document.getElementById('landing')) return '';
+  return '<a class="about-link" href="/?home=1">About Sideline Sub</a>';
+}
 function viewSettingsViewer(tog){
-  return '<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: Viewer · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div></div>'
+  return aboutLink()+'<div class="lbl">Team</div><div class="card"><div style="font-weight:900;font-size:18px">'+esc(TEAMNAME())+'</div><div style="font-weight:700;color:var(--mut)">'+esc(COACHNAME())+' · code <b style="color:var(--fg);letter-spacing:.08em">'+esc(CODE())+'</b> · <span id="syncbadge">'+syncText()+'</span></div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="role">Role: Viewer · change</button><button class="btn sm ghost" data-a="teamleave">Switch team</button></div></div>'
     +'<div class="row"><button class="btn act grow" data-a="history">Season ('+S.history.length+')</button></div>'
     +'<div style="font-size:13px;color:var(--mut);font-weight:700">Names, numbers, the lineup, score, and chat are shared with this team.</div>'
     +'<div class="lbl">App</div><div class="card"><div style="font-weight:800">Version '+APP_VERSION+(IS_APK?' (Android)':' (web)')+'</div><div style="font-size:14px;font-weight:700;color:var(--mut);margin-top:6px">This app does not download or install updates by itself. A new version means installing a new copy.</div><div class="row" style="margin-top:8px"><button class="btn sm ghost grow" data-a="forcepull">Refresh from team</button></div></div>';
@@ -1462,7 +1481,7 @@ function viewSettings(){
   const tog=(k,label,desc)=>'<button class="toggle '+(s[k]?'on':'')+'" data-a="tog" data-k="'+esc(k)+'"><span>'+label+(desc?'<br><small style="color:var(--mut);font-weight:700">'+desc+'</small>':'')+'</span><span class="sw"></span></button>';
   if(isViewer()) return viewSettingsViewer(tog);
   const fsel='<div class="row" style="justify-content:space-between"><div class="field"><label>Formation</label></div><select id="set_formation" '+(G&&G.phase!=='setup'&&G.phase!=='done'?'disabled':'')+'>'+Object.entries(FORMATIONS).map(([k,f])=>'<option value="'+k+'" '+(S.settings.formation===k?'selected':'')+'>'+f.name+'</option>').join('')+'</select></div>'+(G&&G.phase!=='setup'&&G.phase!=='done'?'<div style="font-size:13px;color:var(--mut);font-weight:700">Formation locks while a game is running.</div>':'');
-  return '<div class="lbl">Game</div>'+fsel+num('gameLen','Game length (min)',10,120,5)+num('halfLen','Half length (min)',5,60,5)+num('subInterval','Sub check every (min)',1,20)+num('minTarget','Minimum minutes per player',0,120)+num('maxSubs','Subs suggested per window (1 to 3)',1,3)
+  return aboutLink()+'<div class="lbl">Game</div>'+fsel+num('gameLen','Game length (min)',10,120,5)+num('halfLen','Half length (min)',5,60,5)+num('subInterval','Sub check every (min)',1,20)+num('minTarget','Minimum minutes per player',0,120)+num('maxSubs','Subs suggested per window (1 to 3)',1,3)
     +'<div class="lbl">Lineup balance</div>'+tog('balance','Balance lineups','Avoid stacking developing players at once')+num('weakMax','Max development load on field',0,14)+'<div style="font-size:14px;color:var(--mut);font-weight:700">Core = 0, Developing = 1, Needs support = 2 per player. Those labels stay on this phone. Default 4 (so all four developing players never start together).</div>'
     +'<div class="lbl">Goalkeeper</div>'+tog('gkSafe','Suggest a backup keeper when the lead is safe','Picks the approved keeper with the fewest GK minutes this season; starter moves to a field spot')+num('gkSafeLead','Safe lead (goals ahead)',1,10)+num('gkSafeAfter','Not before game minute',0,60)+num('gkBackLead','Put the starter back if lead drops to',0,10)+tog('gkAuto','Auto-rotate goalkeeper by time','Off = GK changes are manual only')+num('gkInterval','GK rotation interval (min)',1,60)
     +'<div class="lbl">Long stint</div>'+tog('stintWarn','Highlight a player left in too long','Yellow, then orange, then red on the field chip. Pauses with the clock and clears when they come off.')+num('stintYellow','Yellow at (min)',1,60)+num('stintOrange','Orange at (min)',2,90)+num('stintRed','Red at (min)',3,120)+tog('stintSkipGk','Skip the goalkeeper','On by default. Keepers often stay the whole half.')+'<div style="font-size:14px;color:var(--mut);font-weight:700">Starts at 8, 12 and 16 minutes: 40%, 60% and 80% of the 20-minute minimum each player should get. The chip turns red before one stint uses most of a fair share. Changing the minimum later does not move these. Saved on this phone only.</div>'
@@ -2215,11 +2234,12 @@ function syncNativeAlerts(){
   try{ n.startGameService(dueAt, w.lead*1000); }catch(e){}
 }
 document.addEventListener('pointerdown',()=>{ if(beepCtx&&beepCtx.state==='suspended') beepCtx.resume(); });
-function ssEnterApp(){
+function ssEnterApp(fromLanding){
   document.documentElement.classList.add('app-on');
   var landing=document.getElementById('landing');
   if(landing) landing.hidden=true;
   try{ sessionStorage.setItem('ss.app','1'); }catch(e){}
+  if(fromLanding && S.team && S.role){ S.tab='game'; save(true); }
   render();
   if(!S.team){ sheetTeam(true); }
   else if(!S.role){ sheetRole(true); }
@@ -2229,7 +2249,7 @@ if(document.documentElement.classList.contains('app-on')) ssEnterApp();
 else {
   render();
   document.querySelectorAll('[data-open-app]').forEach(function(el){
-    el.addEventListener('click', function(ev){ ev.preventDefault(); ssEnterApp(); });
+    el.addEventListener('click', function(ev){ ev.preventDefault(); ssEnterApp(true); });
   });
 }
 </script>
