@@ -3,7 +3,7 @@
    this origin. activate drops every other cache so a previous cache cannot
    keep serving a page from the old /sidelinesub/ path. */
 'use strict';
-var CACHE = 'sidelinesub-root-3';
+var CACHE = 'sidelinesub-root-4';
 var PRECACHE = ['/', '/index.html', '/manifest.json', '/icon-180.png', '/icon-192.png', '/icon-512.png', '/favicon.ico', '/favicon-32.png', '/og.png', '/robots.txt', '/sitemap.xml'];
 
 function stripBase(url) {

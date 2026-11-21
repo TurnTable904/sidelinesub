@@ -348,6 +348,18 @@ a.land-btn.secondary{background:#fff;color:#0b4fc2!important;box-shadow:inset 0 
   .land-actions a.land-btn{width:100%}
 }
 @media (min-width:720px){.land-grid{grid-template-columns:1fr 1fr 1fr}}
+.land-shots{display:flex;gap:14px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;padding:4px 2px 12px;margin:0 -2px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.land-shot{flex:0 0 78%;max-width:240px;scroll-snap-align:start;margin:0}
+.phone{background:#0e1711;border-radius:28px;padding:8px;box-shadow:0 10px 24px rgba(14,23,17,.16)}
+.phone img{display:block;width:100%;height:auto;border-radius:20px;background:#fff}
+.land-shot figcaption{margin:8px 2px 0;font-size:15px;font-weight:700;line-height:1.35;color:#3d4f44;text-align:center}
+@media (min-width:720px){
+  .land-shots{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));overflow:visible;gap:18px 14px;margin:0;padding:4px 0 0}
+  .land-shot{flex:none;max-width:none}
+  .land-shot:nth-child(-n+3){grid-column:span 2}
+  .land-shot:nth-child(4){grid-column:2 / span 2}
+  .land-shot:nth-child(5){grid-column:4 / span 2}
+}
 #landing #faq ~ section{margin-top:16px}
 </style>
 <script>
@@ -420,6 +432,43 @@ function ssSkipLanding(loc, storage, session, nav, matchMedia) {
       </section>
     </div>
 
+    <section aria-labelledby="simple">
+    <h2 id="simple">See how simple it is</h2>
+    <p>A sample 7v7. Every name on these screens is made up.</p>
+    <div class="land-shots" tabindex="0">
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/lineup.webp" width="560" height="1212" alt="Sample lineup setup for a made-up team, Demo FC. Suggest another and Clear sit above a 7v7 field with Harbor, Fern, Ember, Grove, Pebble, Quartz, and Nimbus. Dune, Indigo, and Widget are starting on the bench." loading="lazy" decoding="async">
+        </div>
+        <figcaption>Suggest, then kick off.</figcaption>
+      </figure>
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/live.webp" width="560" height="1212" alt="Sample live game at 7:00 in the first half. Demo FC is 0 and Rivals is 0. An orange card says to bring Indigo on at left wing for Fern, with a Make this sub button. Fern is outlined on the field." loading="lazy" decoding="async">
+        </div>
+        <figcaption>One card names the next sub.</figcaption>
+      </figure>
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/sub.webp" width="560" height="1212" alt="Sample substitution sheet for Fern number 6 coming off left wing. Indigo is approved to come on. Other made-up players can be picked or swapped." loading="lazy" decoding="async">
+        </div>
+        <figcaption>Or tap a player to change it.</figcaption>
+      </figure>
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/minutes.webp" width="560" height="1212" alt="Sample playing-time screen at 18:00 with 32 minutes left and a 20-minute target. Made-up players show minutes played, who is on the field or the bench, and a projected total." loading="lazy" decoding="async">
+        </div>
+        <figcaption>Minutes stay in view.</figcaption>
+      </figure>
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/roster.webp" width="560" height="1212" alt="Sample roster for Demo FC. Made-up players such as Nimbus, Pebble, and Quartz are listed with a jersey number, a position, and an Out today button." loading="lazy" decoding="async">
+        </div>
+        <figcaption>Names and numbers only.</figcaption>
+      </figure>
+    </div>
+    </section>
+
     <h2 id="how">How a game works</h2>
     <ol>
       <li>Before kickoff, mark who is here, suggest a lineup, and tap Kickoff.</li>
@@ -476,7 +525,7 @@ function ssSkipLanding(loc, storage, session, nav, matchMedia) {
     </div>
   </main>
   <footer>
-    <p>Sideline Sub is a free youth soccer app by Chad Turner.</p>
+    <p>© 2026 Sideline Sub</p>
     <p><a href="https://www.sidelinesub.com/">https://www.sidelinesub.com/</a></p>
   </footer>
 </div>
