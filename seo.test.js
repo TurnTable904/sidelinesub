@@ -46,6 +46,11 @@ assert.ok(text.includes('Equal playing time tracker'));
 assert.ok(text.includes('Soccer lineup rotation'));
 assert.ok(text.includes('Sub timer for coaches'));
 assert.ok(text.includes('Questions coaches and parents ask'));
+assert.ok(text.includes('See how simple it is'));
+assert.ok(text.includes('Every name on these screens is made up.'));
+assert.ok(text.includes('© 2026 Sideline Sub'));
+assert.ok(!/\bChad\b/.test(text), 'public page text does not name Chad');
+assert.ok(!/Turner/.test(text), 'public page text does not include Turner');
 assert.ok(!text.includes('AIza'), 'API key must stay out of the public landing text');
 assert.ok(!/firebasestorage|firebaseio/i.test(visible), 'landing HTML must not point at team data');
 assert.ok(!visible.includes('turntable904.github.io'));
@@ -78,8 +83,17 @@ for (const type of ['WebSite', 'Organization', 'WebApplication', 'FAQPage']) {
   assert.ok(byType[type], type);
 }
 assert.strictEqual(byType.WebSite.url, 'https://www.sidelinesub.com/');
-assert.strictEqual(byType.Organization.founder.name, 'Chad Turner');
+assert.strictEqual(byType.Organization.name, 'Sideline Sub');
+assert.ok(!byType.Organization.founder, 'organization has no founder name');
 assert.strictEqual(byType.Organization.logo.url, 'https://www.sidelinesub.com/icon-512.png');
+assert.strictEqual(byType.WebApplication.author['@id'], 'https://www.sidelinesub.com/#organization');
+assert.ok(index.includes('name="author" content="Sideline Sub"'));
+assert.ok(!/Chad|Turner/.test(index), 'public page source does not name the author');
+assert.ok(!/Chad|Turner/.test(fragment), 'app source does not name the author');
+assert.ok(index.includes('Screenshot this and send it to support.'));
+assert.ok(fragment.includes('Screenshot this and send it to support.'));
+assert.ok(index.includes('placeholder="Coach Sam"'));
+assert.ok(fragment.includes('placeholder="Coach Sam"'));
 assert.strictEqual(byType.WebApplication.offers.price, '0');
 assert.strictEqual(byType.WebApplication.applicationCategory, 'SportsApplication');
 assert.ok(byType.WebApplication.url === 'https://www.sidelinesub.com/');
@@ -129,5 +143,38 @@ const ico = fs.readFileSync(path.join(root, 'favicon.ico'));
 assert.strictEqual(ico.readUInt16LE(0), 0);
 assert.strictEqual(ico.readUInt16LE(2), 1);
 assert.ok(ico.readUInt16LE(4) >= 1);
+
+function webpSize(file) {
+  const buf = fs.readFileSync(file);
+  assert.strictEqual(buf.toString('ascii', 0, 4), 'RIFF');
+  assert.strictEqual(buf.toString('ascii', 8, 12), 'WEBP');
+  assert.strictEqual(buf.toString('ascii', 12, 16), 'VP8 ');
+  return {
+    width: buf.readUInt16LE(26) & 0x3fff,
+    height: buf.readUInt16LE(28) & 0x3fff,
+    bytes: buf.length
+  };
+}
+const shots = ['lineup', 'live', 'sub', 'minutes', 'roster'];
+for (const name of shots) {
+  const file = path.join(root, 'shots', name + '.webp');
+  const size = webpSize(file);
+  assert.strictEqual(size.width, 560, name);
+  assert.strictEqual(size.height, 1212, name);
+  assert.ok(size.bytes < 80000, name + ' is ' + size.bytes);
+  const tag = index.match(new RegExp('<img src="/shots/' + name + '\\.webp"[^>]*>'));
+  assert.ok(tag, 'missing img ' + name);
+  assert.ok(tag[0].includes('width="560"'));
+  assert.ok(tag[0].includes('height="1212"'));
+  assert.ok(tag[0].includes('loading="lazy"'));
+  assert.ok(tag[0].includes('decoding="async"'));
+  const alt = tag[0].match(/alt="([^"]+)"/);
+  assert.ok(alt && alt[1].length > 40, name + ' alt');
+  assert.ok(/made-up|sample/i.test(alt[1]), name + ' alt says it is a sample');
+}
+assert.ok(index.includes('id="simple"'));
+assert.ok(index.indexOf('id="simple"') < index.indexOf('id="how"'));
+assert.ok(index.indexOf('id="landing"') < index.indexOf('id="simple"'));
+assert.ok(index.indexOf('id="simple"') < index.indexOf('id="app"'));
 
 console.log('seo tests passed');

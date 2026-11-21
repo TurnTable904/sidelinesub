@@ -149,7 +149,7 @@
 <link rel="alternate" hreflang="x-default" href="https://www.sidelinesub.com/">
 <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
 <meta name="description" content="Free youth soccer substitution app. Track equal playing time, rotate your lineup, and run a sideline sub timer from your phone. Parents can follow along.">
-<meta name="author" content="Chad Turner">
+<meta name="author" content="Sideline Sub">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="en_US">
@@ -200,8 +200,7 @@
         "url": "https://www.sidelinesub.com/icon-512.png",
         "width": 512,
         "height": 512
-      },
-      "founder": { "@type": "Person", "name": "Chad Turner" }
+      }
     },
     {
       "@type": "WebApplication",
@@ -348,6 +347,18 @@ a.land-btn.secondary{background:#fff;color:#0b4fc2!important;box-shadow:inset 0 
   .land-actions a.land-btn{width:100%}
 }
 @media (min-width:720px){.land-grid{grid-template-columns:1fr 1fr 1fr}}
+.land-shots{display:flex;gap:14px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;padding:4px 2px 12px;margin:0 -2px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.land-shot{flex:0 0 78%;max-width:240px;scroll-snap-align:start;margin:0}
+.phone{background:#0e1711;border-radius:28px;padding:8px;box-shadow:0 10px 24px rgba(14,23,17,.16)}
+.phone img{display:block;width:100%;height:auto;border-radius:20px;background:#fff}
+.land-shot figcaption{margin:8px 2px 0;font-size:15px;font-weight:700;line-height:1.35;color:#3d4f44;text-align:center}
+@media (min-width:720px){
+  .land-shots{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));overflow:visible;gap:18px 14px;margin:0;padding:4px 0 0}
+  .land-shot{flex:none;max-width:none}
+  .land-shot:nth-child(-n+3){grid-column:span 2}
+  .land-shot:nth-child(4){grid-column:2 / span 2}
+  .land-shot:nth-child(5){grid-column:4 / span 2}
+}
 #landing #faq ~ section{margin-top:16px}
 </style>
 <script>
@@ -420,6 +431,43 @@ function ssSkipLanding(loc, storage, session, nav, matchMedia) {
       </section>
     </div>
 
+    <section aria-labelledby="simple">
+    <h2 id="simple">See how simple it is</h2>
+    <p>A sample 7v7. Every name on these screens is made up.</p>
+    <div class="land-shots" tabindex="0">
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/lineup.webp" width="560" height="1212" alt="Sample lineup setup for a made-up team, Demo FC. Suggest another and Clear sit above a 7v7 field with Harbor, Fern, Ember, Grove, Pebble, Quartz, and Nimbus. Dune, Indigo, and Widget are starting on the bench." loading="lazy" decoding="async">
+        </div>
+        <figcaption>Suggest, then kick off.</figcaption>
+      </figure>
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/live.webp" width="560" height="1212" alt="Sample live game at 7:00 in the first half. Demo FC is 0 and Rivals is 0. An orange card says to bring Indigo on at left wing for Fern, with a Make this sub button. Fern is outlined on the field." loading="lazy" decoding="async">
+        </div>
+        <figcaption>One card names the next sub.</figcaption>
+      </figure>
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/sub.webp" width="560" height="1212" alt="Sample substitution sheet for Fern number 6 coming off left wing. Indigo is approved to come on. Other made-up players can be picked or swapped." loading="lazy" decoding="async">
+        </div>
+        <figcaption>Or tap a player to change it.</figcaption>
+      </figure>
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/minutes.webp" width="560" height="1212" alt="Sample playing-time screen at 18:00 with 32 minutes left and a 20-minute target. Made-up players show minutes played, who is on the field or the bench, and a projected total." loading="lazy" decoding="async">
+        </div>
+        <figcaption>Minutes stay in view.</figcaption>
+      </figure>
+      <figure class="land-shot">
+        <div class="phone">
+          <img src="/shots/roster.webp" width="560" height="1212" alt="Sample roster for Demo FC. Made-up players such as Nimbus, Pebble, and Quartz are listed with a jersey number, a position, and an Out today button." loading="lazy" decoding="async">
+        </div>
+        <figcaption>Names and numbers only.</figcaption>
+      </figure>
+    </div>
+    </section>
+
     <h2 id="how">How a game works</h2>
     <ol>
       <li>Before kickoff, mark who is here, suggest a lineup, and tap Kickoff.</li>
@@ -476,7 +524,7 @@ function ssSkipLanding(loc, storage, session, nav, matchMedia) {
     </div>
   </main>
   <footer>
-    <p>Sideline Sub is a free youth soccer app by Chad Turner.</p>
+    <p>© 2026 Sideline Sub</p>
     <p><a href="https://www.sidelinesub.com/">https://www.sidelinesub.com/</a></p>
   </footer>
 </div>
@@ -1320,7 +1368,7 @@ function render(){ G=S.game; document.body.classList.toggle('ro',isViewer());
   try{ renderHeader(); }catch(e){ $('#hdr').innerHTML='<div class="warn">Header error: '+esc(e.message)+'</div>'; }
   renderNav(); const v=$('#view'); const st=v.scrollTop;
   try{ v.innerHTML=({game:viewGame,roster:viewRoster,chat:viewChat,queues:viewQueues,minutes:viewMinutes,settings:viewSettings,photos:viewPhotos})[S.tab](); }
-  catch(e){ v.innerHTML='<div class="warn">This screen hit an error. Screenshot this for Chad.<br><small>'+esc(e.message)+'<br>'+esc(String(e.stack||'').split('\n').slice(1,4).join(' · '))+'</small></div>'+(S.tab==='game'?'<div class="row" style="margin-top:10px"><button class="btn bad grow" data-a="resetgame">Reset game (keeps roster)</button></div>':'')+'<div class="row" style="margin-top:10px"><button class="btn ghost grow" data-a="forcepull">Pull from team</button></div>'; }
+  catch(e){ v.innerHTML='<div class="warn">This screen hit an error. Screenshot this and send it to support.<br><small>'+esc(e.message)+'<br>'+esc(String(e.stack||'').split('\n').slice(1,4).join(' · '))+'</small></div>'+(S.tab==='game'?'<div class="row" style="margin-top:10px"><button class="btn bad grow" data-a="resetgame">Reset game (keeps roster)</button></div>':'')+'<div class="row" style="margin-top:10px"><button class="btn ghost grow" data-a="forcepull">Pull from team</button></div>'; }
   v.scrollTop=st; bind(); }
 function renderNav(){ document.querySelectorAll('#nav button').forEach(b=>{ b.classList.toggle('on',b.dataset.tab===S.tab); if(b.dataset.tab==='chat'){ const unread=(S.chat||[]).filter(m=>m.t>(S.chatSeen||0)&&m.from!==S.chatName).length; b.querySelector('.ic').textContent=unread?'💬 '+unread:'💬'; } }); if(S.tab==='chat'){ S.chatSeen=Date.now(); } }
 
@@ -1444,7 +1492,7 @@ function viewChat(){
 }
 function sendChat(text){ text=(text||'').trim().slice(0,500); if(!text) return; if(!S.chatName){ sheetChatName(text); return; }
   S.chat=S.chat||[]; const m={id:uid(),t:Date.now(),from:String(S.chatName).slice(0,40),text,clock:(G&&G.phase!=='setup'&&G.phase!=='done')?Math.round(clock()):null}; S.chat.push(m); S.chat=S.chat.slice(-200); save(true); pushChat(m); render(); }
-function sheetChatName(pending){ openSheet('<h2>Your name</h2><div class="sub2" style="font-weight:700;color:var(--mut)">Shown on your messages. Once per phone.</div><input id="cn" value="'+esc(S.chatName||'')+'" placeholder="Coach Turner"><button class="btn act big wide" data-a="chatnamesave" data-pending="'+esc(pending||'')+'">Save</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
+function sheetChatName(pending){ openSheet('<h2>Your name</h2><div class="sub2" style="font-weight:700;color:var(--mut)">Shown on your messages. Once per phone.</div><input id="cn" value="'+esc(S.chatName||'')+'" placeholder="Coach Sam"><button class="btn act big wide" data-a="chatnamesave" data-pending="'+esc(pending||'')+'">Save</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
 /* Queues */
 function viewQueues(){
   const f=G?fieldIds():[];
