@@ -83,8 +83,17 @@ for (const type of ['WebSite', 'Organization', 'WebApplication', 'FAQPage']) {
   assert.ok(byType[type], type);
 }
 assert.strictEqual(byType.WebSite.url, 'https://www.sidelinesub.com/');
-assert.strictEqual(byType.Organization.founder.name, 'Chad Turner');
+assert.strictEqual(byType.Organization.name, 'Sideline Sub');
+assert.ok(!byType.Organization.founder, 'organization has no founder name');
 assert.strictEqual(byType.Organization.logo.url, 'https://www.sidelinesub.com/icon-512.png');
+assert.strictEqual(byType.WebApplication.author['@id'], 'https://www.sidelinesub.com/#organization');
+assert.ok(index.includes('name="author" content="Sideline Sub"'));
+assert.ok(!/Chad|Turner/.test(index), 'public page source does not name the author');
+assert.ok(!/Chad|Turner/.test(fragment), 'app source does not name the author');
+assert.ok(index.includes('Screenshot this and send it to support.'));
+assert.ok(fragment.includes('Screenshot this and send it to support.'));
+assert.ok(index.includes('placeholder="Coach Sam"'));
+assert.ok(fragment.includes('placeholder="Coach Sam"'));
 assert.strictEqual(byType.WebApplication.offers.price, '0');
 assert.strictEqual(byType.WebApplication.applicationCategory, 'SportsApplication');
 assert.ok(byType.WebApplication.url === 'https://www.sidelinesub.com/');

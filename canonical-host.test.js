@@ -121,7 +121,7 @@ assert.strictEqual(manifest.scope, '/');
 assert.ok(manifest.icons.every(icon => icon.src.startsWith('/')));
 
 const sw = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
-assert.ok(sw.includes("var CACHE = 'sidelinesub-root-4'"));
+assert.ok(sw.includes("var CACHE = 'sidelinesub-root-5'"));
 assert.ok(sw.includes("'/index.html'"));
 assert.ok(sw.includes("caches.delete"));
 assert.ok(!sw.includes("'/sidelinesub/index.html'"));

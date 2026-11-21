@@ -149,7 +149,7 @@
 <link rel="alternate" hreflang="x-default" href="https://www.sidelinesub.com/">
 <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
 <meta name="description" content="Free youth soccer substitution app. Track equal playing time, rotate your lineup, and run a sideline sub timer from your phone. Parents can follow along.">
-<meta name="author" content="Chad Turner">
+<meta name="author" content="Sideline Sub">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="en_US">
@@ -200,8 +200,7 @@
         "url": "https://www.sidelinesub.com/icon-512.png",
         "width": 512,
         "height": 512
-      },
-      "founder": { "@type": "Person", "name": "Chad Turner" }
+      }
     },
     {
       "@type": "WebApplication",
@@ -1369,7 +1368,7 @@ function render(){ G=S.game; document.body.classList.toggle('ro',isViewer());
   try{ renderHeader(); }catch(e){ $('#hdr').innerHTML='<div class="warn">Header error: '+esc(e.message)+'</div>'; }
   renderNav(); const v=$('#view'); const st=v.scrollTop;
   try{ v.innerHTML=({game:viewGame,roster:viewRoster,chat:viewChat,queues:viewQueues,minutes:viewMinutes,settings:viewSettings,photos:viewPhotos})[S.tab](); }
-  catch(e){ v.innerHTML='<div class="warn">This screen hit an error. Screenshot this for Chad.<br><small>'+esc(e.message)+'<br>'+esc(String(e.stack||'').split('\n').slice(1,4).join(' · '))+'</small></div>'+(S.tab==='game'?'<div class="row" style="margin-top:10px"><button class="btn bad grow" data-a="resetgame">Reset game (keeps roster)</button></div>':'')+'<div class="row" style="margin-top:10px"><button class="btn ghost grow" data-a="forcepull">Pull from team</button></div>'; }
+  catch(e){ v.innerHTML='<div class="warn">This screen hit an error. Screenshot this and send it to support.<br><small>'+esc(e.message)+'<br>'+esc(String(e.stack||'').split('\n').slice(1,4).join(' · '))+'</small></div>'+(S.tab==='game'?'<div class="row" style="margin-top:10px"><button class="btn bad grow" data-a="resetgame">Reset game (keeps roster)</button></div>':'')+'<div class="row" style="margin-top:10px"><button class="btn ghost grow" data-a="forcepull">Pull from team</button></div>'; }
   v.scrollTop=st; bind(); }
 function renderNav(){ document.querySelectorAll('#nav button').forEach(b=>{ b.classList.toggle('on',b.dataset.tab===S.tab); if(b.dataset.tab==='chat'){ const unread=(S.chat||[]).filter(m=>m.t>(S.chatSeen||0)&&m.from!==S.chatName).length; b.querySelector('.ic').textContent=unread?'💬 '+unread:'💬'; } }); if(S.tab==='chat'){ S.chatSeen=Date.now(); } }
 
@@ -1493,7 +1492,7 @@ function viewChat(){
 }
 function sendChat(text){ text=(text||'').trim().slice(0,500); if(!text) return; if(!S.chatName){ sheetChatName(text); return; }
   S.chat=S.chat||[]; const m={id:uid(),t:Date.now(),from:String(S.chatName).slice(0,40),text,clock:(G&&G.phase!=='setup'&&G.phase!=='done')?Math.round(clock()):null}; S.chat.push(m); S.chat=S.chat.slice(-200); save(true); pushChat(m); render(); }
-function sheetChatName(pending){ openSheet('<h2>Your name</h2><div class="sub2" style="font-weight:700;color:var(--mut)">Shown on your messages. Once per phone.</div><input id="cn" value="'+esc(S.chatName||'')+'" placeholder="Coach Turner"><button class="btn act big wide" data-a="chatnamesave" data-pending="'+esc(pending||'')+'">Save</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
+function sheetChatName(pending){ openSheet('<h2>Your name</h2><div class="sub2" style="font-weight:700;color:var(--mut)">Shown on your messages. Once per phone.</div><input id="cn" value="'+esc(S.chatName||'')+'" placeholder="Coach Sam"><button class="btn act big wide" data-a="chatnamesave" data-pending="'+esc(pending||'')+'">Save</button><button class="btn ghost wide" data-a="close">Cancel</button>'); }
 /* Queues */
 function viewQueues(){
   const f=G?fieldIds():[];
